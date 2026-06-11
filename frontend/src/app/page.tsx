@@ -55,7 +55,7 @@ export default function HomePage() {
           fontStyle: 'italic', lineHeight: 1.6,
           maxWidth: '480px', margin: '0 0 8px'
         }}>
-          "An investment in knowledge pays the best interest."
+          &ldquo;An investment in knowledge pays the best interest.&rdquo;
         </p>
         <div style={{ fontSize: '10px', color: '#8A6A4A', letterSpacing: '2px', marginBottom: '40px' }}>
           — BENJAMIN FRANKLIN
@@ -80,7 +80,7 @@ export default function HomePage() {
         justifyContent: 'space-between', padding: '0 48px'
       }}>
         <span style={{ fontSize: '10px', color: '#8A6A4A', letterSpacing: '1px' }}>SETHU — CBIT · 2025</span>
-        <span style={{ fontSize: '10px', color: '#8A6A4A', letterSpacing: '1px' }}>AI & ML DEPT</span>
+        <span style={{ fontSize: '10px', color: '#8A6A4A', letterSpacing: '1px' }}>AI &amp; ML DEPT</span>
       </footer>
 
     </main>

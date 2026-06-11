@@ -28,62 +28,70 @@ export default function SignupPage() {
     setError('')
   }
 
-  async function handleSignup(e: React.FormEvent) {
-    e.preventDefault()
+  function goToStep2() {
+    if (!form.full_name.trim()) { setError('Full name is required'); return }
+    if (!form.email.trim()) { setError('Email is required'); return }
+    if (!form.password) { setError('Password is required'); return }
+    if (form.password.length < 6) { setError('Password must be at least 6 characters'); return }
+    if (form.password !== form.confirm_password) { setError('Passwords do not match'); return }
     setError('')
-
-    if (form.password !== form.confirm_password) {
-      setError('Passwords do not match')
-      return
-    }
-    if (form.password.length < 6) {
-      setError('Password must be at least 6 characters')
-      return
-    }
-
-    setLoading(true)
-
-    // Step 1 — create auth user
-    const { data, error: authError } = await supabase.auth.signUp({
-      email: form.email,
-      password: form.password,
-    })
-
-    if (authError) {
-      setError(authError.message)
-      setLoading(false)
-      return
-    }
-
-    if (!data.user) {
-      setError('Signup failed. Please try again.')
-      setLoading(false)
-      return
-    }
-
-    // Step 2 — insert into users table
-    const { error: dbError } = await supabase.from('users').insert({
-      id: data.user.id,
-      full_name: form.full_name,
-      email: form.email,
-      role: 'student',
-      department: form.department,
-      roll_number: form.roll_number,
-      year: parseInt(form.year),
-      section: form.section,
-    })
-
-    if (dbError) {
-      setError(dbError.message)
-      setLoading(false)
-      return
-    }
-
-    router.push('/dashboard')
-    router.refresh()
+    setStep(2)
   }
 
-  const inputStyle = {
+  async function handleSubmit() {
+    if (!form.roll_number.trim()) { setError('Roll number is required'); return }
+    if (!form.department) { setError('Department is required'); return }
+    if (!form.year) { setError('Year is required'); return }
+    if (!form.section.trim()) { setError('Section is required'); return }
+
+    setLoading(true)
+    setError('')
+
+    try {
+      const { data, error: authError } = await supabase.auth.signUp({
+        email: form.email,
+        password: form.password,
+      })
+
+      if (authError) {
+        setError(authError.message)
+        setLoading(false)
+        return
+      }
+
+      if (!data.user) {
+        setError('Signup failed — no user returned. Try again.')
+        setLoading(false)
+        return
+      }
+
+      const { error: dbError } = await supabase.from('users').insert({
+        id: data.user.id,
+        full_name: form.full_name,
+        email: form.email,
+        role: 'student',
+        department: form.department,
+        roll_number: form.roll_number,
+        year: parseInt(form.year),
+        section: form.section,
+      })
+
+      if (dbError) {
+        setError('Profile save failed: ' + dbError.message)
+        setLoading(false)
+        return
+      }
+
+      router.push('/dashboard')
+      router.refresh()
+
+    } catch (err: any) {
+      setError('Unexpected error: ' + err.message)
+      setLoading(false)
+    }
+  }
+
+  const inputStyle: React.CSSProperties = {
     width: '100%',
     border: '1.5px solid #C8A878',
     background: '#F2EDE6',
@@ -93,21 +101,29 @@ export default function SignupPage() {
     outline: 'none',
     borderRadius: 0,
     fontFamily: 'inherit',
+    display: 'block',
   }
 
-  const labelStyle = {
+  const labelStyle: React.CSSProperties = {
     fontSize: '9px',
     fontWeight: 700,
     letterSpacing: '1.5px',
     color: '#6A4A2A',
     marginBottom: '6px',
-    display: 'block' as const,
+    display: 'block',
   }
 
-  const gridTwo = {
-    display: 'grid',
-    gridTemplateColumns: '1fr 1fr',
-    gap: '12px',
+  const btnPrimary: React.CSSProperties = {
+    width: '100%',
+    background: loading ? '#8A6A4A' : '#1C1208',
+    color: '#F2EDE6',
+    border: 'none',
+    padding: '12px',
+    fontSize: '10px',
+    fontWeight: 700,
+    letterSpacing: '2px',
+    cursor: loading ? 'not-allowed' : 'pointer',
+    fontFamily: 'inherit',
   }
 
   return (
@@ -136,7 +152,7 @@ export default function SignupPage() {
 
         {/* Step indicator */}
         <div style={{ display: 'flex', marginBottom: '20px', border: '1.5px solid #1C1208' }}>
-          {['ACCOUNT', 'DETAILS'].map((label, i) => (
+          {['01 — ACCOUNT', '02 — DETAILS'].map((label, i) => (
             <div key={i} style={{
               flex: 1,
               padding: '8px',
@@ -147,15 +163,16 @@ export default function SignupPage() {
               background: step === i + 1 ? '#1C1208' : '#F2EDE6',
               color: step === i + 1 ? '#F2EDE6' : '#8A6A4A',
               borderRight: i === 0 ? '1.5px solid #1C1208' : 'none',
-              cursor: 'default',
             }}>
-              {`0${i + 1} — ${label}`}
+              {label}
             </div>
           ))}
         </div>
 
-        {/* Form box */}
+        {/* Box */}
         <div style={{ border: '1.5px solid #1C1208', background: '#FDFAF5' }}>
+
+          {/* Box header */}
           <div style={{
             borderBottom: '1.5px solid #1C1208',
             padding: '12px 20px',
@@ -167,9 +184,9 @@ export default function SignupPage() {
             {step === 1 ? 'CREATE ACCOUNT' : 'STUDENT DETAILS'}
           </div>
 
-          <form onSubmit={step === 1 ? (e) => { e.preventDefault(); setStep(2) } : handleSignup}
-            style={{ padding: '24px 20px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
+          <div style={{ padding: '24px 20px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
 
+            {/* ── STEP 1 ── */}
             {step === 1 && (
               <>
                 <div>
@@ -178,7 +195,6 @@ export default function SignupPage() {
                     type="text"
                     value={form.full_name}
                     onChange={e => update('full_name', e.target.value)}
-                    required
                     placeholder="Neeharika Reddy"
                     style={inputStyle}
                   />
@@ -190,20 +206,18 @@ export default function SignupPage() {
                     type="email"
                     value={form.email}
                     onChange={e => update('email', e.target.value)}
-                    required
                     placeholder="you@cbit.ac.in"
                     style={inputStyle}
                   />
                 </div>
 
-                <div style={gridTwo}>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
                   <div>
                     <label style={labelStyle}>PASSWORD</label>
                     <input
                       type="password"
                       value={form.password}
                       onChange={e => update('password', e.target.value)}
-                      required
                       placeholder="min 6 chars"
                       style={inputStyle}
                     />
@@ -214,15 +228,29 @@ export default function SignupPage() {
                       type="password"
                       value={form.confirm_password}
                       onChange={e => update('confirm_password', e.target.value)}
-                      required
-                      placeholder="repeat password"
+                      placeholder="repeat"
                       style={inputStyle}
                     />
                   </div>
                 </div>
+
+                {error && (
+                  <div style={{ fontSize: '11px', color: '#D94F00', borderLeft: '2px solid #D94F00', paddingLeft: '10px' }}>
+                    {error}
+                  </div>
+                )}
+
+                <button
+                  type="button"
+                  onClick={goToStep2}
+                  style={btnPrimary}
+                >
+                  NEXT →
+                </button>
               </>
             )}
 
+            {/* ── STEP 2 ── */}
             {step === 2 && (
               <>
                 <div>
@@ -231,19 +259,17 @@ export default function SignupPage() {
                     type="text"
                     value={form.roll_number}
                     onChange={e => update('roll_number', e.target.value)}
-                    required
                     placeholder="160122737XXX"
                     style={inputStyle}
                   />
                 </div>
 
-                <div style={gridTwo}>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
                   <div>
                     <label style={labelStyle}>DEPARTMENT</label>
                     <select
                       value={form.department}
                       onChange={e => update('department', e.target.value)}
-                      required
                       style={{ ...inputStyle, cursor: 'pointer' }}
                     >
                       <option value="">Select</option>
@@ -261,7 +287,6 @@ export default function SignupPage() {
                     <select
                       value={form.year}
                       onChange={e => update('year', e.target.value)}
-                      required
                       style={{ ...inputStyle, cursor: 'pointer' }}
                     >
                       <option value="">Select</option>
@@ -279,77 +304,65 @@ export default function SignupPage() {
                     type="text"
                     value={form.section}
                     onChange={e => update('section', e.target.value.toUpperCase())}
-                    required
                     placeholder="A"
                     maxLength={2}
                     style={inputStyle}
                   />
                 </div>
+
+                {error && (
+                  <div style={{ fontSize: '11px', color: '#D94F00', borderLeft: '2px solid #D94F00', paddingLeft: '10px' }}>
+                    {error}
+                  </div>
+                )}
+
+                <div style={{ display: 'flex' }}>
+                  <button
+                    type="button"
+                    onClick={() => { setStep(1); setError('') }}
+                    style={{
+                      flex: 1,
+                      background: 'transparent',
+                      color: '#1C1208',
+                      border: '1.5px solid #1C1208',
+                      borderRight: 'none',
+                      padding: '12px',
+                      fontSize: '10px',
+                      fontWeight: 700,
+                      letterSpacing: '2px',
+                      cursor: 'pointer',
+                      fontFamily: 'inherit',
+                    }}
+                  >
+                    ← BACK
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleSubmit}
+                    disabled={loading}
+                    style={{
+                      flex: 2,
+                      background: loading ? '#8A6A4A' : '#1C1208',
+                      color: '#F2EDE6',
+                      border: '1.5px solid #1C1208',
+                      padding: '12px',
+                      fontSize: '10px',
+                      fontWeight: 700,
+                      letterSpacing: '2px',
+                      cursor: loading ? 'not-allowed' : 'pointer',
+                      fontFamily: 'inherit',
+                    }}
+                  >
+                    {loading ? 'CREATING...' : 'CREATE ACCOUNT →'}
+                  </button>
+                </div>
               </>
             )}
 
-            {error && (
-              <div style={{
-                fontSize: '11px',
-                color: '#D94F00',
-                borderLeft: '2px solid #D94F00',
-                paddingLeft: '10px',
-              }}>
-                {error}
-              </div>
-            )}
-
-            <div style={{ display: 'flex', gap: '10px', marginTop: '4px' }}>
-              {step === 2 && (
-                <button
-                  type="button"
-                  onClick={() => setStep(1)}
-                  style={{
-                    flex: 1,
-                    background: 'transparent',
-                    color: '#1C1208',
-                    border: '1.5px solid #1C1208',
-                    padding: '12px',
-                    fontSize: '10px',
-                    fontWeight: 700,
-                    letterSpacing: '2px',
-                    cursor: 'pointer',
-                    fontFamily: 'inherit',
-                  }}
-                >
-                  ← BACK
-                </button>
-              )}
-              <button
-                type="submit"
-                disabled={loading}
-                style={{
-                  flex: 1,
-                  background: loading ? '#8A6A4A' : '#1C1208',
-                  color: '#F2EDE6',
-                  border: 'none',
-                  padding: '12px',
-                  fontSize: '10px',
-                  fontWeight: 700,
-                  letterSpacing: '2px',
-                  cursor: loading ? 'not-allowed' : 'pointer',
-                  fontFamily: 'inherit',
-                }}
-              >
-                {loading ? 'CREATING...' : step === 1 ? 'NEXT →' : 'CREATE ACCOUNT →'}
-              </button>
-            </div>
-
-          </form>
+          </div>
         </div>
 
-        {/* Link to login */}
-        <div style={{
-          marginTop: '16px',
-          fontSize: '11px',
-          color: '#8A6A4A',
-          textAlign: 'center',
-        }}>
+        <div style={{ marginTop: '16px', fontSize: '11px', color: '#8A6A4A', textAlign: 'center' }}>
           Already have an account?{' '}
           <a href="/login" style={{ color: '#D94F00', textDecoration: 'none', fontWeight: 700 }}>
             SIGN IN
