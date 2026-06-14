@@ -59,6 +59,19 @@ export default function LoginPage() {
       return
     }
 
+    // Step 3 — enforce the 7-day verification window
+    try {
+      const checkRes = await fetch('/api/check-verification', { method: 'POST' })
+      const checkData = await checkRes.json()
+      if (checkData.terminated) {
+        setError('Your account was not verified within 7 days and has been removed. Please sign up again.')
+        setLoading(false)
+        return
+      }
+    } catch {
+      // Non-fatal — don't block login if this check fails
+    }
+
     router.push('/dashboard')
     router.refresh()
   }

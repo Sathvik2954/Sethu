@@ -15,7 +15,7 @@ export default async function DashboardPage() {
 
   const { data: profile } = await supabase
     .from('users')
-    .select('full_name, department, year, section, roll_number, email_verified_at')
+    .select('full_name, department, year, section, roll_number, email_verified_at, created_at')
     .eq('id', user!.id)
     .single()
 
@@ -38,6 +38,11 @@ export default async function DashboardPage() {
     .in('status', ['pending', 'in_review'])
 
   const firstName = (profile?.full_name ?? 'Student').split(' ')[0]
+
+  const daysSinceCreated = profile?.created_at
+    ? (Date.now() - new Date(profile.created_at).getTime()) / (1000 * 60 * 60 * 24)
+    : 0
+  const daysLeft = Math.max(0, Math.ceil(7 - daysSinceCreated))
 
   const today = new Date().toLocaleDateString('en-IN', {
     weekday: 'short', day: '2-digit', month: 'short', year: 'numeric',
@@ -79,7 +84,11 @@ export default async function DashboardPage() {
       <main style={{ flex: 1, padding: '20px 24px', display: 'flex', flexDirection: 'column', gap: '16px', overflowY: 'auto' }}>
 
         {/* Email verification banner — hides itself once verified */}
-        <VerifyEmailBanner email={user!.email!} verified={!!profile?.email_verified_at} />
+        <VerifyEmailBanner
+          email={user!.email!}
+          verified={!!profile?.email_verified_at}
+          daysLeft={daysLeft}
+        />
 
         {/* Greeting */}
         <div>

@@ -15,6 +15,17 @@ type Slot = {
 
 type Subject = { id: string; code: string; name: string }
 
+type ParsedSlot = {
+  day_of_week: number
+  start_time: string
+  end_time: string
+  subject_code: string | null
+  subject_name: string | null
+  slot_type: 'class' | 'lab' | 'free' | 'break'
+  room: string | null
+  include: boolean
+}
+
 const DAYS = ['MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT']
 
 const SLOT_STYLE: Record<string, { bg: string; border: string; fg: string; sub: string }> = {
@@ -40,6 +51,14 @@ export default function TimetablePage() {
     subject_id: '',
     room: '',
   })
+
+  // ── Import from PDF ──────────────────────────────────────
+  const [showImport, setShowImport] = useState(false)
+  const [importFile, setImportFile] = useState<File | null>(null)
+  const [importing, setImporting] = useState(false)
+  const [importError, setImportError] = useState('')
+  const [parsedSlots, setParsedSlots] = useState<ParsedSlot[]>([])
+  const [savingImport, setSavingImport] = useState(false)
 
   const supabase = createClient()
 
@@ -115,6 +134,135 @@ export default function TimetablePage() {
     return (eh * 60 + em - sh * 60 - sm) / 60
   }
 
+  // ── Import handlers ──────────────────────────────────────
+  async function handleParse() {
+    if (!importFile) { setImportError('Choose a PDF file first'); return }
+    setImporting(true)
+    setImportError('')
+    setParsedSlots([])
+
+    const formData = new FormData()
+    formData.append('file', importFile)
+
+    try {
+      const res = await fetch(`${process.env.NEXT_PUBLIC_AI_SERVICE_URL}/parse-timetable`, {
+        method: 'POST',
+        body: formData,
+      })
+      const data = await res.json()
+
+      if (!res.ok) {
+        setImportError(data.detail ?? 'Could not parse PDF')
+        setImporting(false)
+        return
+      }
+
+      const result: ParsedSlot[] = (data.slots ?? []).map((s: {
+        day_of_week: number | null
+        start_time: string | null
+        end_time: string | null
+        subject_code: string | null
+        subject_name: string | null
+        slot_type?: 'class' | 'lab' | 'free' | 'break'
+        room: string | null
+      }) => ({
+        day_of_week: s.day_of_week ?? 0,
+        start_time: s.start_time || '09:00',
+        end_time: s.end_time || '10:00',
+        subject_code: s.subject_code,
+        subject_name: s.subject_name,
+        slot_type: s.slot_type ?? 'class',
+        room: s.room,
+        include: true,
+      }))
+      setParsedSlots(result)
+    } catch {
+      setImportError('Could not reach the AI service. Is it running?')
+    }
+
+    setImporting(false)
+  }
+
+  function updateParsedSlot(index: number, field: keyof ParsedSlot, value: string | boolean) {
+    setParsedSlots(prev => prev.map((s, i) => i === index ? { ...s, [field]: value } : s))
+  }
+
+  async function handleSaveImport() {
+    setSavingImport(true)
+    setImportError('')
+
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) { setImportError('Not signed in'); setSavingImport(false); return }
+
+    const included = parsedSlots.filter(s => s.include)
+
+    for (const slot of included) {
+      if (!slot.start_time || !slot.end_time) {
+        setImportError(`Row "${slot.subject_code ?? slot.slot_type}" is missing a start/end time — fix it in the preview before saving.`)
+        setSavingImport(false)
+        return
+      }
+    }
+
+    for (const slot of included) {
+      let subjectId: string | null = null
+
+      if (slot.slot_type !== 'free' && slot.slot_type !== 'break' && slot.subject_code) {
+        const { data: existing } = await supabase
+          .from('subjects')
+          .select('id')
+          .ilike('code', slot.subject_code)
+          .eq('student_id', user.id)
+          .maybeSingle()
+
+        if (existing) {
+          subjectId = existing.id
+        } else {
+          const { data: newSubject, error: subError } = await supabase
+            .from('subjects')
+            .insert({
+              student_id: user.id,
+              code: slot.subject_code,
+              name: slot.subject_name ?? slot.subject_code,
+              difficulty: 3,
+              coverage_pct: 0,
+            })
+            .select('id')
+            .single()
+
+          if (subError) {
+            setImportError(`Could not create subject ${slot.subject_code}: ${subError.message}`)
+            setSavingImport(false)
+            return
+          }
+          subjectId = newSubject.id
+        }
+      }
+
+      const { error: insertError } = await supabase.from('timetable').insert({
+        student_id: user.id,
+        day_of_week: slot.day_of_week,
+        start_time: slot.start_time,
+        end_time: slot.end_time,
+        slot_type: slot.slot_type,
+        subject_id: subjectId,
+        room: slot.room,
+      })
+
+      if (insertError) {
+        setImportError(`Could not save slot: ${insertError.message}`)
+        setSavingImport(false)
+        return
+      }
+    }
+
+    setSavingImport(false)
+    setShowImport(false)
+    setImportFile(null)
+    setParsedSlots([])
+    fetchAll()
+  }
+
   // Free hours today (JS getDay: 0=Sun..6=Sat -> our 0=Mon..5=Sat)
   const jsDay = new Date().getDay()
   const todayIdx = jsDay === 0 ? -1 : jsDay - 1
@@ -170,18 +318,159 @@ export default function TimetablePage() {
               Mark free slots too — the AI planner uses them to suggest study sessions.
             </p>
           </div>
-          <button
-            type="button"
-            onClick={() => { setShowForm(!showForm); setError('') }}
-            style={{
-              background: '#1C1208', color: '#F2EDE6', border: 'none',
-              padding: '10px 22px', fontSize: '10px', fontWeight: 700,
-              letterSpacing: '2px', cursor: 'pointer', fontFamily: 'inherit',
-            }}
-          >
-            {showForm ? '✕ CLOSE' : '+ ADD SLOT'}
-          </button>
+          <div style={{ display: 'flex', gap: '8px' }}>
+            <button
+              type="button"
+              onClick={() => { setShowImport(!showImport); setShowForm(false); setError(''); setImportError('') }}
+              style={{
+                background: 'transparent', color: '#1C1208', border: '1.5px solid #1C1208',
+                padding: '10px 22px', fontSize: '10px', fontWeight: 700,
+                letterSpacing: '2px', cursor: 'pointer', fontFamily: 'inherit',
+              }}
+            >
+              {showImport ? '✕ CLOSE' : '↑ IMPORT FROM PDF'}
+            </button>
+            <button
+              type="button"
+              onClick={() => { setShowForm(!showForm); setShowImport(false); setError(''); setImportError('') }}
+              style={{
+                background: '#1C1208', color: '#F2EDE6', border: 'none',
+                padding: '10px 22px', fontSize: '10px', fontWeight: 700,
+                letterSpacing: '2px', cursor: 'pointer', fontFamily: 'inherit',
+              }}
+            >
+              {showForm ? '✕ CLOSE' : '+ ADD SLOT'}
+            </button>
+          </div>
         </div>
+
+        {/* Import panel */}
+        {showImport && (
+          <div style={{ border: '1.5px solid #1C1208', background: '#FDFAF5', padding: '18px' }}>
+            <div style={{ fontSize: '9px', fontWeight: 700, letterSpacing: '1.5px', color: '#8A6A4A', marginBottom: '12px' }}>
+              UPLOAD YOUR CLASS TIMETABLE (PDF)
+            </div>
+
+            <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+              <input
+                type="file"
+                accept="application/pdf"
+                onChange={e => { setImportFile(e.target.files?.[0] ?? null); setImportError('') }}
+                style={{ ...inputStyle, flex: 1, padding: '8px 11px' }}
+              />
+              <button
+                type="button"
+                onClick={handleParse}
+                disabled={importing}
+                style={{
+                  background: importing ? '#8A6A4A' : '#1C1208', color: '#F2EDE6',
+                  border: 'none', padding: '11px 22px', fontSize: '10px', fontWeight: 700,
+                  letterSpacing: '2px', cursor: importing ? 'not-allowed' : 'pointer',
+                  fontFamily: 'inherit', flexShrink: 0,
+                }}
+              >
+                {importing ? 'PARSING...' : 'PARSE WITH AI'}
+              </button>
+            </div>
+
+            {importError && (
+              <div style={{ fontSize: '11px', color: '#D94F00', borderLeft: '2px solid #D94F00', paddingLeft: '10px', marginTop: '12px' }}>
+                {importError}
+              </div>
+            )}
+
+            {/* Preview */}
+            {parsedSlots.length > 0 && (
+              <div style={{ marginTop: '16px' }}>
+                <div style={{ fontSize: '9px', fontWeight: 700, letterSpacing: '1.5px', color: '#8A6A4A', marginBottom: '10px' }}>
+                  REVIEW {parsedSlots.length} SLOTS — EDIT IF NEEDED, UNCHECK TO SKIP
+                </div>
+
+                <div style={{ border: '1.5px solid #1C1208', maxHeight: '360px', overflowY: 'auto' }}>
+                  {parsedSlots.map((s, i) => (
+                    <div key={i} style={{
+                      display: 'grid',
+                      gridTemplateColumns: '24px 70px 80px 80px 90px 1fr 70px 70px',
+                      gap: '6px', alignItems: 'center',
+                      padding: '8px 10px',
+                      background: '#FDFAF5',
+                      borderBottom: i < parsedSlots.length - 1 ? '1px solid #E0D0B8' : 'none',
+                    }}>
+                      <input
+                        type="checkbox"
+                        checked={s.include}
+                        onChange={e => updateParsedSlot(i, 'include', e.target.checked)}
+                      />
+                      <select
+                        value={s.day_of_week}
+                        onChange={e => updateParsedSlot(i, 'day_of_week', e.target.value)}
+                        style={{ ...inputStyle, padding: '5px 6px', fontSize: '10px' }}
+                      >
+                        {DAYS.map((d, idx) => <option key={d} value={idx}>{d}</option>)}
+                      </select>
+                      <input
+                        type="time"
+                        value={s.start_time}
+                        onChange={e => updateParsedSlot(i, 'start_time', e.target.value)}
+                        style={{ ...inputStyle, padding: '5px 6px', fontSize: '10px' }}
+                      />
+                      <input
+                        type="time"
+                        value={s.end_time}
+                        onChange={e => updateParsedSlot(i, 'end_time', e.target.value)}
+                        style={{ ...inputStyle, padding: '5px 6px', fontSize: '10px' }}
+                      />
+                      <select
+                        value={s.slot_type}
+                        onChange={e => updateParsedSlot(i, 'slot_type', e.target.value)}
+                        style={{ ...inputStyle, padding: '5px 6px', fontSize: '10px' }}
+                      >
+                        <option value="class">Class</option>
+                        <option value="lab">Lab</option>
+                        <option value="free">Free</option>
+                        <option value="break">Break</option>
+                      </select>
+                      <input
+                        type="text"
+                        value={s.subject_code ?? ''}
+                        onChange={e => updateParsedSlot(i, 'subject_code', e.target.value)}
+                        placeholder="Subject code"
+                        style={{ ...inputStyle, padding: '5px 6px', fontSize: '10px' }}
+                      />
+                      <input
+                        type="text"
+                        value={s.room ?? ''}
+                        onChange={e => updateParsedSlot(i, 'room', e.target.value)}
+                        placeholder="Room"
+                        style={{ ...inputStyle, padding: '5px 6px', fontSize: '10px' }}
+                      />
+                      <span style={{ fontSize: '9px', color: '#8A6A4A' }}>
+                        {s.subject_name ?? ''}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+
+                <button
+                  type="button"
+                  onClick={handleSaveImport}
+                  disabled={savingImport}
+                  style={{
+                    marginTop: '12px', width: '100%',
+                    background: savingImport ? '#8A6A4A' : '#1C1208', color: '#F2EDE6',
+                    border: 'none', padding: '11px', fontSize: '10px', fontWeight: 700,
+                    letterSpacing: '2px', cursor: savingImport ? 'not-allowed' : 'pointer',
+                    fontFamily: 'inherit',
+                  }}
+                >
+                  {savingImport
+                    ? 'SAVING...'
+                    : `SAVE ${parsedSlots.filter(s => s.include).length} SLOTS →`}
+                </button>
+              </div>
+            )}
+          </div>
+        )}
 
         {showForm && (
           <div style={{ border: '1.5px solid #1C1208', background: '#FDFAF5', padding: '18px' }}>
