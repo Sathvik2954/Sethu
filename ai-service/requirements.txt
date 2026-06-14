@@ -1,4 +1,11 @@
 fastapi
-uvicorn
-mistralai
+uvicorn[standard]
+httpx
 python-dotenv
+pydantic
+pdfplumber
+python-multipart
+pypdfium2
+Pillow
+numpy
+easyocr
