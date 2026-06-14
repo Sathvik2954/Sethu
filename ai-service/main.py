@@ -32,8 +32,8 @@ app = FastAPI(title="SETHU AI Service")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000"],
-    allow_credentials=True,
+    allow_origins=["*"],
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -218,20 +218,32 @@ def render_pdf_pages_as_png(file_bytes: bytes, max_pages: int = 3, resolution: i
 # ── EasyOCR — lazy-loaded reader (model weights download on first use) ──
 
 _ocr_reader = None
+_ocr_available = True
 
 def get_ocr_reader():
-    global _ocr_reader
+    global _ocr_reader, _ocr_available
+    if not _ocr_available:
+        return None
     if _ocr_reader is None:
-        import easyocr
-        _ocr_reader = easyocr.Reader(['en'], gpu=False)
+        try:
+            import easyocr
+            _ocr_reader = easyocr.Reader(['en'], gpu=False)
+        except ImportError:
+            # EasyOCR not installed (e.g. lightweight deployment) —
+            # OCR mode is skipped and we fall through to vision mode.
+            _ocr_available = False
+            return None
     return _ocr_reader
 
 
 def ocr_image_to_text(img_bytes: bytes) -> str:
     """Run EasyOCR on an image and reconstruct rough row/column structure
     based on text bounding box positions, so a table-like layout survives
-    as text (columns joined with ' | ')."""
+    as text (columns joined with ' | '). Returns "" if EasyOCR isn't
+    available."""
     reader = get_ocr_reader()
+    if reader is None:
+        return ""
 
     img = Image.open(io.BytesIO(img_bytes)).convert('RGB')
     img_array = np.array(img)
