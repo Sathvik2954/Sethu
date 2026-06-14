@@ -11,3 +11,28 @@ body {
   margin: 0;
   padding: 0;
 }
+
+/* ============================================================
+   SETHU brand animations
+   Append these to the BOTTOM of frontend/src/app/globals.css
+   ============================================================ */
+
+@keyframes sethuFloat1 {
+  0%, 100% { transform: translateY(0px) rotate(0deg); }
+  50% { transform: translateY(-6px) rotate(8deg); }
+}
+
+@keyframes sethuFloat2 {
+  0%, 100% { transform: translateY(0px) rotate(0deg); }
+  50% { transform: translateY(8px) rotate(-10deg); }
+}
+
+@keyframes sethuDrawLine {
+  from { width: 0; }
+  to { width: 48px; }
+}
+
+@keyframes sethuFadeUp {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}

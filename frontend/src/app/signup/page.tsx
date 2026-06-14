@@ -3,6 +3,21 @@
 import { useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
+import Logo from '@/components/Logo'
+import FloatingShapes from '@/components/FloatingShapes'
+
+const DEPARTMENTS = [
+  'CSE', 'AIML', 'CET', 'AIDS', 'IT',
+  'ECE', 'EEE', 'MECH', 'CIVIL', 'BIO TECH',
+]
+
+function passwordChecks(pwd: string) {
+  return {
+    length: pwd.length >= 8,
+    cases: /[A-Z]/.test(pwd) && /[a-z]/.test(pwd),
+    numberSymbol: /[0-9]/.test(pwd) && /[^A-Za-z0-9]/.test(pwd),
+  }
+}
 
 export default function SignupPage() {
   const [step, setStep] = useState(1)
@@ -28,11 +43,17 @@ export default function SignupPage() {
     setError('')
   }
 
+  const checks = passwordChecks(form.password)
+  const passScore = Object.values(checks).filter(Boolean).length
+
   function goToStep2() {
     if (!form.full_name.trim()) { setError('Full name is required'); return }
     if (!form.email.trim()) { setError('Email is required'); return }
     if (!form.password) { setError('Password is required'); return }
-    if (form.password.length < 6) { setError('Password must be at least 6 characters'); return }
+    if (!checks.length || !checks.cases || !checks.numberSymbol) {
+      setError('Password does not meet all requirements below')
+      return
+    }
     if (form.password !== form.confirm_password) { setError('Passwords do not match'); return }
     setError('')
     setStep(2)
@@ -85,8 +106,9 @@ export default function SignupPage() {
       router.push('/dashboard')
       router.refresh()
 
-    } catch (err: any) {
-      setError('Unexpected error: ' + err.message)
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Unknown error'
+      setError('Unexpected error: ' + message)
       setLoading(false)
     }
   }
@@ -126,6 +148,14 @@ export default function SignupPage() {
     fontFamily: 'inherit',
   }
 
+  const reqRowStyle = (ok: boolean): React.CSSProperties => ({
+    fontSize: '10px',
+    color: ok ? '#3D7A50' : '#8A6A4A',
+    display: 'flex',
+    alignItems: 'center',
+    gap: '6px',
+  })
+
   return (
     <main style={{
       minHeight: '100vh',
@@ -136,17 +166,23 @@ export default function SignupPage() {
       justifyContent: 'center',
       fontFamily: "'Helvetica Neue', Helvetica, Arial, sans-serif",
       padding: '40px 24px',
+      position: 'relative', overflow: 'hidden',
     }}>
-      <div style={{ width: '100%', maxWidth: '480px' }}>
+      <FloatingShapes />
+
+      <div style={{
+        width: '100%', maxWidth: '480px',
+        opacity: 0, animation: 'sethuFadeUp 0.5s ease-out forwards',
+      }}>
 
         {/* Wordmark */}
-        <div style={{ marginBottom: '32px' }}>
-          <div style={{ fontSize: '28px', fontWeight: 700, color: '#1C1208', letterSpacing: '4px' }}>
-            SETHU
-          </div>
-          <div style={{ width: '36px', height: '2px', background: '#D94F00', margin: '8px 0' }} />
-          <div style={{ fontSize: '10px', color: '#8A6A4A', letterSpacing: '1.5px' }}>
-            CBIT CAMPUS MANAGEMENT
+        <div style={{ marginBottom: '32px', display: 'flex', alignItems: 'center', gap: '14px' }}>
+          <Logo variant="light" size={48} />
+          <div>
+            <div style={{ fontSize: '28px', fontWeight: 700, color: '#1C1208', letterSpacing: '4px', lineHeight: 1 }}>SETHU</div>
+            <div style={{ fontSize: '10px', color: '#8A6A4A', letterSpacing: '1.5px', marginTop: '6px' }}>
+              CBIT CAMPUS MANAGEMENT
+            </div>
           </div>
         </div>
 
@@ -218,7 +254,7 @@ export default function SignupPage() {
                       type="password"
                       value={form.password}
                       onChange={e => update('password', e.target.value)}
-                      placeholder="min 6 chars"
+                      placeholder="min 8 chars"
                       style={inputStyle}
                     />
                   </div>
@@ -231,6 +267,35 @@ export default function SignupPage() {
                       placeholder="repeat"
                       style={inputStyle}
                     />
+                  </div>
+                </div>
+
+                {/* Strength meter */}
+                <div>
+                  <div style={{ display: 'flex', gap: '4px', marginBottom: '8px' }}>
+                    {[1, 2, 3].map(seg => (
+                      <div key={seg} style={{
+                        flex: 1, height: '4px',
+                        background:
+                          passScore >= seg
+                            ? (passScore === 1 ? '#D94F00' : passScore === 2 ? '#E8C87A' : '#3D7A50')
+                            : '#E0D0B8',
+                      }} />
+                    ))}
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '5px' }}>
+                    <div style={reqRowStyle(checks.length)}>
+                      <span>{checks.length ? '✓' : '—'}</span>
+                      <span>Minimum 8 characters</span>
+                    </div>
+                    <div style={reqRowStyle(checks.cases)}>
+                      <span>{checks.cases ? '✓' : '—'}</span>
+                      <span>Upper &amp; lowercase letters</span>
+                    </div>
+                    <div style={reqRowStyle(checks.numberSymbol)}>
+                      <span>{checks.numberSymbol ? '✓' : '—'}</span>
+                      <span>A number and a symbol</span>
+                    </div>
                   </div>
                 </div>
 
@@ -273,13 +338,9 @@ export default function SignupPage() {
                       style={{ ...inputStyle, cursor: 'pointer' }}
                     >
                       <option value="">Select</option>
-                      <option value="CSE">CSE</option>
-                      <option value="AI&ML">AI & ML</option>
-                      <option value="ECE">ECE</option>
-                      <option value="EEE">EEE</option>
-                      <option value="MECH">MECH</option>
-                      <option value="CIVIL">CIVIL</option>
-                      <option value="IT">IT</option>
+                      {DEPARTMENTS.map(d => (
+                        <option key={d} value={d}>{d}</option>
+                      ))}
                     </select>
                   </div>
                   <div>

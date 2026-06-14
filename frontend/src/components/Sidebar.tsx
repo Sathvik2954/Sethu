@@ -8,28 +8,35 @@ type SidebarProps = {
   fullName: string
   department: string
   year: number | null
+  role?: string
 }
 
-const NAV = [
-  { group: 'ACADEMIC', items: [
-    { label: 'Dashboard', href: '/dashboard' },
-    { label: 'Timetable', href: '/timetable' },
-    { label: 'Subjects', href: '/subjects' },
-    { label: 'Deadlines', href: '/deadlines' },
-  ]},
-  { group: 'INTELLIGENCE', items: [
-    { label: 'AI Planner', href: '/planner' },
-  ]},
-  { group: 'SERVICES', items: [
-    { label: 'Requests', href: '/requests' },
-    { label: 'Documents', href: '/documents' },
-  ]},
-]
-
-export default function Sidebar({ fullName, department, year }: SidebarProps) {
+export default function Sidebar({ fullName, department, year, role = 'student' }: SidebarProps) {
   const pathname = usePathname()
   const router = useRouter()
   const supabase = createClient()
+
+  const NAV = role === 'student'
+    ? [
+        { group: 'ACADEMIC', items: [
+          { label: 'Dashboard', href: '/dashboard' },
+          { label: 'Timetable', href: '/timetable' },
+          { label: 'Subjects', href: '/subjects' },
+          { label: 'Deadlines', href: '/deadlines' },
+        ]},
+        { group: 'INTELLIGENCE', items: [
+          { label: 'AI Planner', href: '/planner' },
+        ]},
+        { group: 'SERVICES', items: [
+          { label: 'Requests', href: '/requests' },
+          { label: 'Documents', href: '/documents' },
+        ]},
+      ]
+    : [
+        { group: 'STAFF', items: [
+          { label: 'Approvals', href: '/approvals' },
+        ]},
+      ]
 
   async function handleLogout() {
     await supabase.auth.signOut()
@@ -37,7 +44,7 @@ export default function Sidebar({ fullName, department, year }: SidebarProps) {
     router.refresh()
   }
 
-  const yearLabel = year ? `${year}${['ST','ND','RD','TH'][year - 1] || 'TH'} YEAR` : ''
+  const yearLabel = year ? `${year}${['ST','ND','RD','TH'][year - 1] || 'TH'} YEAR` : role.toUpperCase()
 
   return (
     <aside style={{
@@ -45,7 +52,6 @@ export default function Sidebar({ fullName, department, year }: SidebarProps) {
       display: 'flex', flexDirection: 'column', minHeight: '100vh',
     }}>
 
-      {/* Wordmark */}
       <div style={{ padding: '22px 20px 18px', borderBottom: '1px solid #2E1E10' }}>
         <div style={{ fontSize: '20px', fontWeight: 700, color: '#F2EDE6', letterSpacing: '3px' }}>
           SETHU
@@ -56,7 +62,6 @@ export default function Sidebar({ fullName, department, year }: SidebarProps) {
         </div>
       </div>
 
-      {/* Nav */}
       <nav style={{ flex: 1, padding: '10px 0' }}>
         {NAV.map(group => (
           <div key={group.group}>
@@ -88,7 +93,6 @@ export default function Sidebar({ fullName, department, year }: SidebarProps) {
         ))}
       </nav>
 
-      {/* User footer */}
       <div style={{ padding: '16px 20px', borderTop: '1px solid #2E1E10' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '9px', marginBottom: '12px' }}>
           <div style={{

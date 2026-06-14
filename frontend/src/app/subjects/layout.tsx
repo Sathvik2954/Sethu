@@ -26,10 +26,11 @@ export default async function SubjectsLayout({
       fontFamily: "'Helvetica Neue', Helvetica, Arial, sans-serif",
     }}>
       <Sidebar
-        fullName={profile?.full_name ?? 'Student'}
-        department={profile?.department ?? ''}
-        year={profile?.year ?? null}
-      />
+  fullName={profile?.full_name ?? 'Student'}
+  department={profile?.department ?? ''}
+  year={profile?.year ?? null}
+  role={profile?.role ?? 'student'}
+/>
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0 }}>
         {children}
       </div>

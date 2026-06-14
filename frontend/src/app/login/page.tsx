@@ -3,9 +3,11 @@
 import { useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
+import Logo from '@/components/Logo'
+import FloatingShapes from '@/components/FloatingShapes'
 
 export default function LoginPage() {
-  const [email, setEmail] = useState('')
+  const [identifier, setIdentifier] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
@@ -13,13 +15,43 @@ export default function LoginPage() {
   const supabase = createClient()
 
   async function handleLogin() {
-    if (!email.trim()) { setError('Email is required'); return }
+    if (!identifier.trim()) { setError('Roll number or email is required'); return }
     if (!password) { setError('Password is required'); return }
 
     setLoading(true)
     setError('')
 
-    const { error } = await supabase.auth.signInWithPassword({ email, password })
+    // Step 1 — resolve roll number / email to the account's email
+    let resolvedEmail = identifier.trim()
+
+    if (!resolvedEmail.includes('@')) {
+      try {
+        const res = await fetch('/api/lookup-email', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ identifier: resolvedEmail }),
+        })
+        const data = await res.json()
+
+        if (!res.ok) {
+          setError(data.error ?? 'Account not found')
+          setLoading(false)
+          return
+        }
+
+        resolvedEmail = data.email
+      } catch {
+        setError('Could not verify roll number. Try signing in with email instead.')
+        setLoading(false)
+        return
+      }
+    }
+
+    // Step 2 — sign in with the resolved email
+    const { error } = await supabase.auth.signInWithPassword({
+      email: resolvedEmail,
+      password,
+    })
 
     if (error) {
       setError(error.message)
@@ -50,17 +82,25 @@ export default function LoginPage() {
       minHeight: '100vh', width: '100%',
       background: '#F2EDE6', display: 'flex',
       alignItems: 'center', justifyContent: 'center',
-      fontFamily: "'Helvetica Neue', Helvetica, Arial, sans-serif"
+      fontFamily: "'Helvetica Neue', Helvetica, Arial, sans-serif",
+      position: 'relative', overflow: 'hidden',
     }}>
-      <div style={{ width: '100%', maxWidth: '400px', padding: '0 24px' }}>
+      <FloatingShapes />
 
-        <div style={{ marginBottom: '40px' }}>
-          <div style={{ fontSize: '28px', fontWeight: 700, color: '#1C1208', letterSpacing: '4px' }}>
-            SETHU
-          </div>
-          <div style={{ width: '36px', height: '2px', background: '#D94F00', margin: '8px 0' }} />
-          <div style={{ fontSize: '10px', color: '#8A6A4A', letterSpacing: '1.5px' }}>
-            CBIT CAMPUS MANAGEMENT
+      <div style={{
+        width: '100%', maxWidth: '400px', padding: '0 24px',
+        opacity: 0, animation: 'sethuFadeUp 0.5s ease-out forwards',
+      }}>
+
+        <div style={{ marginBottom: '40px', display: 'flex', alignItems: 'center', gap: '14px' }}>
+          <Logo variant="light" size={48} />
+          <div>
+            <div style={{ fontSize: '28px', fontWeight: 700, color: '#1C1208', letterSpacing: '4px', lineHeight: 1 }}>
+              SETHU
+            </div>
+            <div style={{ fontSize: '10px', color: '#8A6A4A', letterSpacing: '1.5px', marginTop: '6px' }}>
+              CBIT CAMPUS MANAGEMENT
+            </div>
           </div>
         </div>
 
@@ -76,15 +116,18 @@ export default function LoginPage() {
           <div style={{ padding: '24px 20px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
 
             <div>
-              <label style={labelStyle}>EMAIL</label>
+              <label style={labelStyle}>ROLL NUMBER OR EMAIL</label>
               <input
-                type="email"
-                value={email}
-                onChange={e => { setEmail(e.target.value); setError('') }}
+                type="text"
+                value={identifier}
+                onChange={e => { setIdentifier(e.target.value); setError('') }}
                 onKeyDown={e => e.key === 'Enter' && handleLogin()}
-                placeholder="you@cbit.ac.in"
+                placeholder="160122737XXX or you@cbit.ac.in"
                 style={inputStyle}
               />
+              <div style={{ fontSize: '9px', color: '#8A6A4A', marginTop: '5px' }}>
+                You can use either to sign in
+              </div>
             </div>
 
             <div>

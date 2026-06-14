@@ -1,4 +1,5 @@
 import { createServerSupabaseClient } from '@/lib/supabase/server'
+import VerifyEmailBanner from '@/components/VerifyEmailBanner'
 
 function greeting() {
   const h = new Date().getHours()
@@ -14,7 +15,7 @@ export default async function DashboardPage() {
 
   const { data: profile } = await supabase
     .from('users')
-    .select('full_name, department, year, section, roll_number')
+    .select('full_name, department, year, section, roll_number, email_verified_at')
     .eq('id', user!.id)
     .single()
 
@@ -76,6 +77,9 @@ export default async function DashboardPage() {
 
       {/* Content */}
       <main style={{ flex: 1, padding: '20px 24px', display: 'flex', flexDirection: 'column', gap: '16px', overflowY: 'auto' }}>
+
+        {/* Email verification banner — hides itself once verified */}
+        <VerifyEmailBanner email={user!.email!} verified={!!profile?.email_verified_at} />
 
         {/* Greeting */}
         <div>

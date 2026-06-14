@@ -2,7 +2,7 @@ import { redirect } from 'next/navigation'
 import { createServerSupabaseClient } from '@/lib/supabase/server'
 import Sidebar from '@/components/Sidebar'
 
-export default async function DashboardLayout({
+export default async function DocumentsLayout({
   children,
 }: {
   children: React.ReactNode
@@ -26,11 +26,11 @@ export default async function DashboardLayout({
       fontFamily: "'Helvetica Neue', Helvetica, Arial, sans-serif",
     }}>
       <Sidebar
-  fullName={profile?.full_name ?? 'Student'}
-  department={profile?.department ?? ''}
-  year={profile?.year ?? null}
-  role={profile?.role ?? 'student'}
-/>
+        fullName={profile?.full_name ?? 'Student'}
+        department={profile?.department ?? ''}
+        year={profile?.year ?? null}
+        role={profile?.role ?? 'student'}
+      />
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0 }}>
         {children}
       </div>
