@@ -1,53 +1,35 @@
-import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
 
-export async function middleware(request: NextRequest) {
-  let supabaseResponse = NextResponse.next({ request })
+export function middleware(request: NextRequest) {
+  const path = request.nextUrl.pathname
 
-  const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    {
-      cookies: {
-        getAll() {
-          return request.cookies.getAll()
-        },
-        setAll(cookiesToSet) {
-          cookiesToSet.forEach(({ name, value }) =>
-            request.cookies.set(name, value)
-          )
-          supabaseResponse = NextResponse.next({ request })
-          cookiesToSet.forEach(({ name, value, options }) =>
-            supabaseResponse.cookies.set(name, value, options)
-          )
-        },
-      },
-    }
+  const isPublicPage = path === '/' ||
+                        path.startsWith('/login') ||
+                        path.startsWith('/signup') ||
+                        path.startsWith('/auth')
+
+  // Supabase stores the session in a cookie named like
+  // "sb-<project-ref>-auth-token" (sometimes split into
+  // "...-auth-token.0", "...-auth-token.1" for large sessions).
+  const hasSession = request.cookies.getAll().some(
+    cookie => cookie.name.startsWith('sb-') && cookie.name.includes('-auth-token')
   )
 
-  const { data: { user } } = await supabase.auth.getUser()
-
-  const path = request.nextUrl.pathname
-  const isPublicPage = path === '/' ||
-                     path.startsWith('/login') ||
-                     path.startsWith('/signup') ||
-                     path.startsWith('/auth')
-
-  if (!user && !isPublicPage) {
+  if (!hasSession && !isPublicPage) {
     const url = request.nextUrl.clone()
     url.pathname = '/login'
     return NextResponse.redirect(url)
   }
 
-  if (user && (path.startsWith('/login') || path.startsWith('/signup'))) {
+  if (hasSession && (path.startsWith('/login') || path.startsWith('/signup'))) {
     const url = request.nextUrl.clone()
     url.pathname = '/dashboard'
     return NextResponse.redirect(url)
   }
 
-  return supabaseResponse
+  return NextResponse.next()
 }
 
 export const config = {
-  matcher: ['/((?!_next/static|_next/image|favicon.ico|.*\\.woff2?|.*\\.png|.*\\.svg).*)'],
+  matcher: ['/((?!_next/static|_next/image|favicon.ico).*)'],
 }
