@@ -175,7 +175,7 @@ function Scene() {
 
 export default function StudentDeskScene() {
   return (
-    <div style={{ width: '450px', height: '450px', margin: '0 auto' }}>
+    <div style={{ width: '100%', height: '100%' }}>
       <Canvas
         camera={{ position: [2.6, 1.6, -4.6], fov: 38 }}
         gl={{ alpha: true, antialias: true }}

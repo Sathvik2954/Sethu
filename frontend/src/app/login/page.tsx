@@ -96,16 +96,17 @@ export default function LoginPage() {
       background: '#F2EDE6', display: 'flex',
       alignItems: 'center', justifyContent: 'center',
       fontFamily: "'Helvetica Neue', Helvetica, Arial, sans-serif",
-      position: 'relative', overflow: 'hidden',
+      position: 'relative', overflowX: 'hidden', overflowY: 'auto',
+      padding: '40px 0',
     }}>
       <FloatingShapes />
 
       <div style={{
-        width: '100%', maxWidth: '400px', padding: '0 24px',
+        width: '100%', maxWidth: '400px', padding: '0 clamp(16px, 5vw, 24px)',
         opacity: 0, animation: 'sethuFadeUp 0.5s ease-out forwards',
       }}>
 
-        <div style={{ marginBottom: '40px', display: 'flex', alignItems: 'center', gap: '14px' }}>
+        <div style={{ marginBottom: '40px', display: 'flex', alignItems: 'center', gap: '14px', flexWrap: 'wrap' }}>
           <Logo variant="light" size={48} />
           <div>
             <div style={{ fontSize: '28px', fontWeight: 700, color: '#1C1208', letterSpacing: '4px', lineHeight: 1 }}>

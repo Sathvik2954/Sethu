@@ -61,7 +61,8 @@ export default async function DashboardPage() {
       <header style={{
         height: '48px', borderBottom: '2px solid #1C1208',
         display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-        padding: '0 24px', background: '#F2EDE6', flexShrink: 0,
+        padding: '0 clamp(12px, 4vw, 24px)', background: '#F2EDE6', flexShrink: 0,
+        flexWrap: 'wrap', gap: '4px', minHeight: '48px',
       }}>
         <div style={{ display: 'flex', alignItems: 'baseline', gap: '12px' }}>
           <span style={{ fontSize: '13px', fontWeight: 700, color: '#1C1208', letterSpacing: '0.5px' }}>
@@ -81,7 +82,7 @@ export default async function DashboardPage() {
       </header>
 
       {/* Content */}
-      <main style={{ flex: 1, padding: '20px 24px', display: 'flex', flexDirection: 'column', gap: '16px', overflowY: 'auto' }}>
+      <main style={{ flex: 1, padding: 'clamp(12px, 4vw, 20px) clamp(12px, 4vw, 24px)', display: 'flex', flexDirection: 'column', gap: '16px', overflowY: 'auto' }}>
 
         {/* Email verification banner — hides itself once verified */}
         <VerifyEmailBanner
@@ -102,13 +103,13 @@ export default async function DashboardPage() {
 
         {/* KPI strip */}
         <div style={{
-          display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)',
-          border: '1.5px solid #1C1208',
+          display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))',
+          gap: '8px',
         }}>
-          {kpis.map((kpi, i) => (
+          {kpis.map((kpi) => (
             <div key={kpi.label} style={{
               padding: '14px 16px',
-              borderRight: i < 3 ? '1.5px solid #1C1208' : 'none',
+              border: '1.5px solid #1C1208',
             }}>
               <div style={{ fontSize: '9px', letterSpacing: '1.5px', color: '#8A6A4A', marginBottom: '8px', fontWeight: 700 }}>
                 {kpi.label}

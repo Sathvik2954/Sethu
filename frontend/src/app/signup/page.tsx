@@ -165,8 +165,8 @@ export default function SignupPage() {
       alignItems: 'center',
       justifyContent: 'center',
       fontFamily: "'Helvetica Neue', Helvetica, Arial, sans-serif",
-      padding: '40px 24px',
-      position: 'relative', overflow: 'hidden',
+      padding: 'clamp(24px, 8vw, 40px) clamp(16px, 5vw, 24px)',
+      position: 'relative', overflowX: 'hidden', overflowY: 'auto',
     }}>
       <FloatingShapes />
 
@@ -176,7 +176,7 @@ export default function SignupPage() {
       }}>
 
         {/* Wordmark */}
-        <div style={{ marginBottom: '32px', display: 'flex', alignItems: 'center', gap: '14px' }}>
+        <div style={{ marginBottom: '32px', display: 'flex', alignItems: 'center', gap: '14px', flexWrap: 'wrap' }}>
           <Logo variant="light" size={48} />
           <div>
             <div style={{ fontSize: '28px', fontWeight: 700, color: '#1C1208', letterSpacing: '4px', lineHeight: 1 }}>SETHU</div>
@@ -247,7 +247,7 @@ export default function SignupPage() {
                   />
                 </div>
 
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(110px, 1fr))', gap: '12px' }}>
                   <div>
                     <label style={labelStyle}>PASSWORD</label>
                     <input
@@ -329,7 +329,7 @@ export default function SignupPage() {
                   />
                 </div>
 
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(110px, 1fr))', gap: '12px' }}>
                   <div>
                     <label style={labelStyle}>DEPARTMENT</label>
                     <select
