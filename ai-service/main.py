@@ -15,8 +15,6 @@ from pydantic import BaseModel
 from dotenv import load_dotenv
 import httpx
 import pdfplumber
-import numpy as np
-from PIL import Image
 
 load_dotenv()
 
@@ -226,10 +224,10 @@ def get_ocr_reader():
         return None
     if _ocr_reader is None:
         try:
-            import easyocr
-            _ocr_reader = easyocr.Reader(['en'], gpu=False)
+            from rapidocr_onnxruntime import RapidOCR
+            _ocr_reader = RapidOCR()
         except ImportError:
-            # EasyOCR not installed (e.g. lightweight deployment) —
+            # rapidocr-onnxruntime not installed —
             # OCR mode is skipped and we fall through to vision mode.
             _ocr_available = False
             return None
@@ -237,59 +235,38 @@ def get_ocr_reader():
 
 
 def ocr_image_to_text(img_bytes: bytes) -> str:
-    """Run EasyOCR on an image and reconstruct rough row/column structure
-    based on text bounding box positions, so a table-like layout survives
-    as text (columns joined with ' | '). Returns "" if EasyOCR isn't
-    available."""
+    """Run RapidOCR on an image and return each detected text fragment
+    tagged with its pixel coordinates (x increases right, y increases
+    down). Single-character fragments are dropped — these are almost
+    always noise from vertical/rotated labels (e.g. a "LUNCH BREAK"
+    column printed as stacked letters), not meaningful content.
+    Returns "" if RapidOCR isn't available or finds nothing."""
     reader = get_ocr_reader()
     if reader is None:
         return ""
 
-    img = Image.open(io.BytesIO(img_bytes)).convert('RGB')
-    img_array = np.array(img)
-
-    results = reader.readtext(img_array, detail=1)
-    if not results:
+    result, _ = reader(img_bytes)
+    if not result:
         return ""
 
-    # bbox is 4 points [[x1,y1],[x2,y2],[x3,y3],[x4,y4]]
+    # Each item is [bbox, text, score], where bbox is 4 points
+    # [[x1,y1],[x2,y2],[x3,y3],[x4,y4]] — same shape as EasyOCR's output.
     items = []
-    heights = []
-    for bbox, text, conf in results:
+    for bbox, text, conf in result:
+        text = text.strip()
+        if len(text) <= 1:
+            continue
         ys = [p[1] for p in bbox]
         xs = [p[0] for p in bbox]
-        y_center = sum(ys) / len(ys)
-        x_center = sum(xs) / len(xs)
-        heights.append(max(ys) - min(ys))
-        items.append((y_center, x_center, text))
+        x = int(sum(xs) / len(xs))
+        y = int(sum(ys) / len(ys))
+        items.append((y, x, text))
 
-    heights.sort()
-    median_height = heights[len(heights) // 2] if heights else 15
-    row_threshold = max(median_height * 0.7, 5)
+    if not items:
+        return ""
 
-    items.sort(key=lambda i: i[0])
-
-    rows = []
-    current_row = []
-    current_y = None
-
-    for y, x, text in items:
-        if current_y is None or abs(y - current_y) <= row_threshold:
-            current_row.append((x, text))
-            current_y = y if current_y is None else (current_y + y) / 2
-        else:
-            rows.append(current_row)
-            current_row = [(x, text)]
-            current_y = y
-    if current_row:
-        rows.append(current_row)
-
-    lines = []
-    for row in rows:
-        row.sort(key=lambda i: i[0])
-        lines.append(" | ".join(t for _, t in row))
-
-    return "\n".join(lines)
+    items.sort()
+    return "\n".join(f'"{t}" at (x={x}, y={y})' for y, x, t in items)
 
 
 # ── Robust JSON extraction from model responses ─────────────────
@@ -365,18 +342,46 @@ Extract every class/lab/free/break slot you can identify.
 TIMETABLE TEXT:
 """
 
-CLASS_TIMETABLE_OCR_PROMPT = f"""You are given OCR output from a college class timetable image (a weekly schedule grid).
+CLASS_TIMETABLE_OCR_PROMPT = f"""You are given OCR output from a college class timetable PDF page, rendered
+as an image. Each line below is one detected text fragment with its pixel
+position on the page: "TEXT" at (x=..., y=...). x increases to the right,
+y increases downward. Spacing/characters may occasionally be imperfect.
 
-This text was produced by OCR — items on the same row of the table are joined with " | ",
-but spacing, ordering, and a few characters may be imperfect. Use context (day names,
-time patterns like "9:00-10:00", subject-code patterns like "CS301") to reconstruct the
-table correctly despite OCR noise.
+This is very likely laid out as a GRID:
+- One column (often on the left, smallish x) lists DAY NAMES (MONDAY,
+  TUESDAY, ..., SATURDAY), each at a different y. Each day's row spans
+  roughly from its own y down to the next day's y.
+- Several columns to the right are PERIODS (often labeled with Roman
+  numerals I, II, III, IV, V, VI), each at a smaller y than the day rows
+  (i.e. above the grid, as column headers). Each period's TIME RANGE is
+  usually split across two fragments at similar x but different y — e.g.
+  "09:10AMTO" just above "10:10AM" together mean the period runs
+  09:10 AM to 10:10 AM. Combine such pairs to get each period's start/end
+  time, and use that period's x position to define that column's x-range.
+- There may be a "LUNCH BREAK" (or similar) label printed vertically as a
+  narrow column between two periods — if you see short fragments near the
+  same x spanning a wide y-range that don't look like subject codes, this
+  is that label. Do NOT create a slot for it; just treat the periods on
+  either side as adjacent.
+- For each day's row, match each subject-code fragment to the period
+  column whose x-range it falls within, and use that period's time range
+  as the slot's start_time/end_time.
+- Some entries (often lab sessions, e.g. "XYZ Lab (B1) @ Lab-3") are WIDER
+  and may span TWO OR MORE consecutive periods for that day — if a day's
+  row has fewer entries than the total number of periods, this is likely
+  why; in that case use the combined time range (start of the first
+  covered period to end of the last covered period) for that slot.
+- Ignore any text that's clearly part of a different table further down
+  the page (e.g. course codes, faculty names, mobile numbers, signatures)
+  — only extract slots from the day x period grid itself.
+- If SATURDAY (or any day) has no subject entries in its row, it's a free
+  day — you may omit it or mark its periods as "free".
 
-Extract every class/lab/free/break slot you can identify.
+Extract every class/lab/free/break slot you can identify from the grid.
 
 {TIMETABLE_EXTRACTION_RULES}
 
-OCR TEXT:
+OCR TEXT (coordinate-tagged):
 """
 
 CLASS_TIMETABLE_IMAGE_PROMPT = f"""This image shows a college class timetable (a weekly schedule grid).

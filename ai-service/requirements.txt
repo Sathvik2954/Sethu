@@ -7,5 +7,4 @@ pdfplumber
 python-multipart
 pypdfium2
 Pillow
-numpy
-easyocr
+rapidocr-onnxruntime
