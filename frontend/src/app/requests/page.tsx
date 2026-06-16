@@ -3,7 +3,6 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
 import { createClient } from '@/lib/supabase/client'
 
-// ── Types ─────────────────────────────────────────────────────
 type RequestType = 'event_permission' | 'complaint' | 'gate_pass' | 'suggestion'
   | 'bonafide' | 'lost_id_card' | 'fees'
 
@@ -46,7 +45,6 @@ type FormState = {
   fee_name: string; fee_other_name: string; fee_amount: string
 }
 
-// ── Constants ─────────────────────────────────────────────────
 const inputStyle: React.CSSProperties = {
   width: '100%', border: '1.5px solid #C8A878', background: '#F2EDE6',
   padding: '10px 12px', fontSize: '13px', color: '#1C1208',
@@ -69,6 +67,7 @@ const TYPE_LABELS: Record<RequestType, string> = {
   lost_id_card: 'Lost ID Card',
   fees: 'Fee Receipt',
 }
+
 function emptyForm(): FormState {
   return {
     event_date: '', event_subject: '', event_content: '', signature_confirm: false,
@@ -81,7 +80,7 @@ function emptyForm(): FormState {
   }
 }
 
-// ── Sub-components OUTSIDE main component (fixes cursor jump) ──
+// ── Sub-components OUTSIDE main (fixes cursor jump) ────────────
 
 function Row({ label, value }: { label: string; value: string }) {
   return (
@@ -98,17 +97,13 @@ function RequestCard({ r }: { r: Request }) {
   const [open, setOpen] = useState(false)
   return (
     <div style={{ border: '1.5px solid #1C1208', background: '#FDFAF5', marginBottom: '8px' }}>
-      <div
-        onClick={() => setOpen(o => !o)}
-        style={{
-          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-          padding: '12px 16px', cursor: 'pointer', gap: '12px', flexWrap: 'wrap',
-        }}
-      >
+      <div onClick={() => setOpen(o => !o)} style={{
+        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+        padding: '12px 16px', cursor: 'pointer', gap: '12px', flexWrap: 'wrap',
+      }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
           <span style={{
-            fontSize: '8px', fontWeight: 700, letterSpacing: '1px',
-            padding: '3px 8px',
+            fontSize: '8px', fontWeight: 700, letterSpacing: '1px', padding: '3px 8px',
             background: statusColor[r.status] ?? '#8A6A4A',
             color: r.status === 'pending' ? '#1C1208' : '#F2EDE6',
           }}>
@@ -196,14 +191,47 @@ function TypeBtn({ type, desc, onClick }: { type: RequestType; desc: string; onC
     <button type="button" onClick={() => onClick(type)} style={{
       background: '#FDFAF5', border: '1.5px solid #1C1208',
       padding: '18px 20px', textAlign: 'left', cursor: 'pointer',
-      fontFamily: 'inherit', display: 'flex', flexDirection: 'column', gap: '6px',
-      width: '100%',
+      fontFamily: 'inherit', display: 'flex', flexDirection: 'column', gap: '6px', width: '100%',
     }}>
       <span style={{ fontSize: '14px', fontWeight: 700, color: '#D94F00', letterSpacing: '0.3px' }}>
         {TYPE_LABELS[type]}
       </span>
       <span style={{ fontSize: '11px', color: '#8A6A4A' }}>{desc}</span>
     </button>
+  )
+}
+
+// ── File upload — outside main ─────────────────────────────────
+function FileUpload({
+  fileRef, paymentFile, setPaymentFile, setFormError,
+}: {
+  fileRef: React.RefObject<HTMLInputElement | null>
+  paymentFile: File | null
+  setPaymentFile: (f: File | null) => void
+  setFormError: (e: string) => void
+}) {
+  return (
+    <div>
+      <label style={{ fontSize: '9px', fontWeight: 700, letterSpacing: '1.5px', color: '#6A4A2A', marginBottom: '6px', display: 'block' }}>
+        PAYMENT SCREENSHOT *
+      </label>
+      <div onClick={() => fileRef.current?.click()} style={{
+        border: '1.5px dashed #C8A878', padding: '20px', textAlign: 'center',
+        cursor: 'pointer', background: '#F2EDE6',
+      }}>
+        {paymentFile
+          ? <span style={{ fontSize: '12px', color: '#3D7A50', fontWeight: 700 }}>✓ {paymentFile.name}</span>
+          : <span style={{ fontSize: '11px', color: '#8A6A4A' }}>Click to upload payment screenshot (JPG, PNG, PDF — max 5MB)</span>
+        }
+      </div>
+      <input ref={fileRef} type="file" accept="image/*,application/pdf" style={{ display: 'none' }}
+        onChange={e => {
+          const f = e.target.files?.[0]
+          if (f && f.size > 5 * 1024 * 1024) { setFormError('File must be under 5MB'); return }
+          if (f) { setPaymentFile(f); setFormError('') }
+        }}
+      />
+    </div>
   )
 }
 
@@ -219,7 +247,7 @@ export default function RequestsPage() {
   const [formError, setFormError] = useState('')
   const [success, setSuccess] = useState('')
   const [userId, setUserId] = useState<string | null>(null)
-  const fileRef = useRef<HTMLInputElement>(null)
+  const fileRef = useRef<HTMLInputElement | null>(null)
 
   useEffect(() => {
     async function load() {
@@ -236,7 +264,6 @@ export default function RequestsPage() {
     load()
   }, [])
 
-  // useCallback so these references are stable — no remounts
   const upd = useCallback((field: string, value: string | boolean) => {
     setForm(p => ({ ...p, [field]: value }))
     setFormError('')
@@ -324,7 +351,6 @@ export default function RequestsPage() {
 
   return (
     <>
-      {/* ── Modal ── */}
       {activeForm && (
         <div style={{
           position: 'fixed', inset: 0, background: 'rgba(28,18,8,0.55)',
@@ -471,7 +497,6 @@ export default function RequestsPage() {
         </div>
       )}
 
-      {/* Topbar */}
       <header style={{
         minHeight: '48px', borderBottom: '2px solid #1C1208',
         display: 'flex', alignItems: 'center', padding: '0 clamp(12px,4vw,24px)',
@@ -492,13 +517,10 @@ export default function RequestsPage() {
           </div>
         )}
 
-        {/* ── HOD ── */}
         <section>
           <div style={{
             fontSize: '16px', fontWeight: 700, color: '#D94F00',
-            letterSpacing: '1px', padding: '14px 20px',
-            borderBottom: '1.5px solid #1C1208', background: '#F2EDE6',
-            border: '1.5px solid #1C1208',
+            letterSpacing: '1px', padding: '14px 20px', border: '1.5px solid #1C1208',
           }}>
             HEAD OF THE DEPARTMENT — REQUESTS
           </div>
@@ -514,20 +536,16 @@ export default function RequestsPage() {
           </div>
           {hodRequests.length > 0 && (
             <div style={{ marginTop: '12px' }}>
-              <div style={{ fontSize: '9px', fontWeight: 700, letterSpacing: '2px', color: '#8A6A4A', marginBottom: '8px' }}>
-                YOUR HOD REQUESTS
-              </div>
+              <div style={{ fontSize: '9px', fontWeight: 700, letterSpacing: '2px', color: '#8A6A4A', marginBottom: '8px' }}>YOUR HOD REQUESTS</div>
               {hodRequests.map(r => <RequestCard key={r.id} r={r} />)}
             </div>
           )}
         </section>
 
-        {/* ── Admin ── */}
         <section>
           <div style={{
             fontSize: '16px', fontWeight: 700, color: '#D94F00',
-            letterSpacing: '1px', padding: '14px 20px',
-            border: '1.5px solid #1C1208',
+            letterSpacing: '1px', padding: '14px 20px', border: '1.5px solid #1C1208',
           }}>
             ADMINISTRATIVE — REQUESTS
           </div>
@@ -539,14 +557,11 @@ export default function RequestsPage() {
             <TypeBtn type="bonafide" desc="Certificate with payment screenshot" onClick={openForm} />
             <TypeBtn type="lost_id_card" desc="Report lost card + payment" onClick={openForm} />
             <TypeBtn type="fees" desc="Fee payment confirmation & receipt" onClick={openForm} />
-            {/* Empty cell to balance the 2-col grid */}
             <div />
           </div>
           {adminRequests.length > 0 && (
             <div style={{ marginTop: '12px' }}>
-              <div style={{ fontSize: '9px', fontWeight: 700, letterSpacing: '2px', color: '#8A6A4A', marginBottom: '8px' }}>
-                YOUR ADMIN REQUESTS
-              </div>
+              <div style={{ fontSize: '9px', fontWeight: 700, letterSpacing: '2px', color: '#8A6A4A', marginBottom: '8px' }}>YOUR ADMIN REQUESTS</div>
               {adminRequests.map(r => <RequestCard key={r.id} r={r} />)}
             </div>
           )}
@@ -559,55 +574,5 @@ export default function RequestsPage() {
         )}
       </main>
     </>
-  )
-}
-
-// ── File upload — also outside main component ─────────────────
-function FileUpload({
-  fileRef,
-  paymentFile,
-  setPaymentFile,
-  setFormError,
-}: {
-  fileRef: React.RefObject<HTMLInputElement>
-  paymentFile: File | null
-  setPaymentFile: (f: File | null) => void
-  setFormError: (e: string) => void
-}) {
-  return (
-    <div>
-      <label style={{
-        fontSize: '9px', fontWeight: 700, letterSpacing: '1.5px',
-        color: '#6A4A2A', marginBottom: '6px', display: 'block',
-      }}>
-        PAYMENT SCREENSHOT *
-      </label>
-      <div
-        onClick={() => fileRef.current?.click()}
-        style={{
-          border: '1.5px dashed #C8A878', padding: '20px', textAlign: 'center',
-          cursor: 'pointer', background: '#F2EDE6',
-        }}
-      >
-        {paymentFile ? (
-          <span style={{ fontSize: '12px', color: '#3D7A50', fontWeight: 700 }}>✓ {paymentFile.name}</span>
-        ) : (
-          <span style={{ fontSize: '11px', color: '#8A6A4A' }}>
-            Click to upload payment screenshot (JPG, PNG, PDF — max 5MB)
-          </span>
-        )}
-      </div>
-      <input
-        ref={fileRef}
-        type="file"
-        accept="image/*,application/pdf"
-        style={{ display: 'none' }}
-        onChange={e => {
-          const f = e.target.files?.[0]
-          if (f && f.size > 5 * 1024 * 1024) { setFormError('File must be under 5MB'); return }
-          if (f) { setPaymentFile(f); setFormError('') }
-        }}
-      />
-    </div>
   )
 }

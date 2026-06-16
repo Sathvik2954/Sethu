@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback, useRef } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { createClient } from '@/lib/supabase/client'
 
 // ── Types ──────────────────────────────────────────────────────
@@ -119,11 +119,9 @@ export default function ApprovalsPage() {
   const [expanded, setExpanded] = useState<string | null>(null)
   const [adminNotes, setAdminNotes] = useState('')
   const [adminDate, setAdminDate] = useState('')
-  const [pdfFile, setPdfFile] = useState<File | null>(null)
   const [acting, setActing] = useState(false)
   const [error, setError] = useState('')
   const [successMsg, setSuccessMsg] = useState('')
-  const pdfRef = useRef<HTMLInputElement>(null)
 
   const fetchRequests = useCallback(async () => {
     setLoading(true)
@@ -148,7 +146,6 @@ export default function ApprovalsPage() {
     setExpanded(id)
     setAdminNotes(r?.admin_notes ?? '')
     setAdminDate(r?.admin_set_date ? new Date(r.admin_set_date).toISOString().slice(0, 16) : '')
-    setPdfFile(null)
     setError('')
     setSuccessMsg('')
   }
@@ -158,32 +155,33 @@ export default function ApprovalsPage() {
     setError('')
     setSuccessMsg('')
 
-    // Upload PDF if provided
-    let pdfUrl = r.generated_pdf_url
-    if (pdfFile) {
-      const { data: { user } } = await supabase.auth.getUser()
-      const path = `generated/${r.id}/${pdfFile.name}`
-      const { error: upErr } = await supabase.storage
-        .from('request-attachments')
-        .upload(path, pdfFile, { upsert: true })
-      if (upErr) { setError('PDF upload failed: ' + upErr.message); setActing(false); return }
-      const { data } = supabase.storage.from('request-attachments').getPublicUrl(path)
-      pdfUrl = data.publicUrl
-    }
-
     const { error: dbErr } = await supabase
       .from('requests')
       .update({
         status: newStatus,
         admin_notes: adminNotes.trim() || null,
         admin_set_date: adminDate ? new Date(adminDate).toISOString() : null,
-        generated_pdf_url: pdfUrl,
       })
       .eq('id', r.id)
 
     if (dbErr) { setError('Update failed: ' + dbErr.message); setActing(false); return }
 
-    setSuccessMsg(`Request ${newStatus}.`)
+    // Auto-generate PDF when approved
+    if (newStatus === 'approved') {
+      try {
+        const res = await fetch('/api/generate-document', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ requestId: r.id }),
+        })
+        const result = await res.json()
+        if (!res.ok) console.error('Doc gen failed:', result.error)
+      } catch (e) {
+        console.error('Doc gen error:', e)
+      }
+    }
+
+    setSuccessMsg(`Request marked as ${newStatus}.`)
     setExpanded(null)
     setActing(false)
     fetchRequests()
@@ -282,7 +280,6 @@ export default function ApprovalsPage() {
               const st = STATUS_COLOR[r.status] ?? STATUS_COLOR.pending
               const isOpen = expanded === r.id
               const needsDate = r.request_type === 'lost_id_card' || r.request_type === 'bonafide' || r.request_type === 'fees'
-              const needsPdf = r.request_type === 'bonafide' || r.request_type === 'fees'
 
               return (
                 <div key={r.id} style={{ borderBottom: i < requests.length - 1 ? '1px solid #E0D0B8' : 'none', background: '#FDFAF5' }}>
@@ -363,33 +360,12 @@ export default function ApprovalsPage() {
                           </div>
                         )}
 
-                        {needsPdf && (
-                          <div>
-                            <div style={{ fontSize: '9px', color: '#8A6A4A', letterSpacing: '1px', marginBottom: '6px' }}>
-                              UPLOAD GENERATED {r.request_type === 'bonafide' ? 'BONAFIDE' : 'RECEIPT'} PDF
-                            </div>
-                            <div
-                              onClick={() => pdfRef.current?.click()}
-                              style={{
-                                border: '1px dashed #4A3020', padding: '14px', textAlign: 'center',
-                                cursor: 'pointer', background: '#261A0A',
-                              }}
-                            >
-                              {pdfFile
-                                ? <span style={{ fontSize: '11px', color: '#3D7A50', fontWeight: 700 }}>✓ {pdfFile.name}</span>
-                                : <span style={{ fontSize: '11px', color: '#6A4A2A' }}>Click to upload PDF</span>
-                              }
-                            </div>
-                            <input ref={pdfRef} type="file" accept="application/pdf" style={{ display: 'none' }}
-                              onChange={e => { const f = e.target.files?.[0]; if (f) setPdfFile(f) }} />
-                            {r.generated_pdf_url && (
-                              <div style={{ marginTop: '6px', fontSize: '10px', color: '#6A4A2A' }}>
-                                Previously uploaded:{' '}
-                                <a href={r.generated_pdf_url} target="_blank" rel="noopener noreferrer" style={{ color: '#E8C87A' }}>
-                                  view ↗
-                                </a>
-                              </div>
-                            )}
+                        {r.generated_pdf_url && (
+                          <div style={{ fontSize: '10px', color: '#6A4A2A' }}>
+                            Previously generated:{' '}
+                            <a href={r.generated_pdf_url} target="_blank" rel="noopener noreferrer" style={{ color: '#E8C87A' }}>
+                              view PDF ↗
+                            </a>
                           </div>
                         )}
 
