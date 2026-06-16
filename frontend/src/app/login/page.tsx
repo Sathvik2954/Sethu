@@ -21,7 +21,6 @@ export default function LoginPage() {
     setLoading(true)
     setError('')
 
-    // Step 1 — resolve roll number / email to the account's email
     let resolvedEmail = identifier.trim()
 
     if (!resolvedEmail.includes('@')) {
@@ -47,7 +46,6 @@ export default function LoginPage() {
       }
     }
 
-    // Step 2 — sign in with the resolved email
     const { error } = await supabase.auth.signInWithPassword({
       email: resolvedEmail,
       password,
@@ -59,7 +57,6 @@ export default function LoginPage() {
       return
     }
 
-    // Step 3 — enforce the 7-day verification window
     try {
       const checkRes = await fetch('/api/check-verification', { method: 'POST' })
       const checkData = await checkRes.json()
@@ -69,7 +66,7 @@ export default function LoginPage() {
         return
       }
     } catch {
-      // Non-fatal — don't block login if this check fails
+      // Non-fatal
     }
 
     router.push('/dashboard')
@@ -145,7 +142,15 @@ export default function LoginPage() {
             </div>
 
             <div>
-              <label style={labelStyle}>PASSWORD</label>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: '6px' }}>
+                <label style={{ ...labelStyle, marginBottom: 0 }}>PASSWORD</label>
+                <a
+                  href="/forgot-password"
+                  style={{ fontSize: '9px', color: '#D94F00', textDecoration: 'none', fontWeight: 700, letterSpacing: '0.5px' }}
+                >
+                  FORGOT PASSWORD?
+                </a>
+              </div>
               <input
                 type="password"
                 value={password}

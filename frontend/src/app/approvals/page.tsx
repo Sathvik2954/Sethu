@@ -1,150 +1,189 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { createClient } from '@/lib/supabase/client'
 
-type Step = {
-  id: string
-  step_number: number
-  step_label: string
-  status: 'pending' | 'approved' | 'rejected'
-  comments: string | null
-  acted_at: string | null
-}
+// ── Types ──────────────────────────────────────────────────────
+type RequestType = 'event_permission' | 'complaint' | 'gate_pass' | 'suggestion'
+  | 'bonafide' | 'lost_id_card' | 'fees'
 
-type StudentInfo = {
-  full_name: string
-  roll_number: string | null
-  department: string
-}
-
-type Req = {
+type Request = {
   id: string
-  type: string
+  section: 'hod' | 'admin'
+  request_type: RequestType
   status: string
-  title: string
-  description: string | null
-  metadata: Record<string, string> | null
   submitted_at: string
-  approval_steps: Step[]
-  student: StudentInfo | null
+  admin_notes: string | null
+  admin_set_date: string | null
+  // HOD fields
+  event_date: string | null
+  event_subject: string | null
+  event_content: string | null
+  signature_confirm: boolean | null
+  problem_description: string | null
+  gate_pass_date: string | null
+  gate_pass_reason: string | null
+  gate_pass_return_time: string | null
+  suggestion_text: string | null
+  // Admin fields
+  bonafide_purpose: string | null
+  bonafide_notes: string | null
+  lost_date: string | null
+  lost_location: string | null
+  lost_description: string | null
+  fee_name: string | null
+  fee_other_name: string | null
+  fee_amount: number | null
+  payment_screenshot_url: string | null
+  generated_pdf_url: string | null
+  // Joined
+  student: { full_name: string; roll_number: string | null; department: string } | null
 }
 
-const STATUS_STYLE: Record<string, { bg: string; fg: string }> = {
-  pending:   { bg: '#3A2808', fg: '#C8A050' },
-  in_review: { bg: '#2A1A30', fg: '#C0A0D0' },
-  approved:  { bg: '#1A3020', fg: '#6AAA70' },
-  rejected:  { bg: '#3D1A08', fg: '#E8805A' },
+const TYPE_LABELS: Record<RequestType, string> = {
+  event_permission: 'Event / Placement Permission',
+  complaint: 'Complaint',
+  gate_pass: 'Gate Pass',
+  suggestion: 'Suggestion',
+  bonafide: 'Bonafide Certificate',
+  lost_id_card: 'Lost ID Card',
+  fees: 'Fee Receipt',
 }
 
+const STATUS_COLOR: Record<string, { bg: string; fg: string }> = {
+  pending:   { bg: '#E8C87A', fg: '#1C1208' },
+  in_review: { bg: '#D94F00', fg: '#F2EDE6' },
+  approved:  { bg: '#3D7A50', fg: '#F2EDE6' },
+  rejected:  { bg: '#8A6A4A', fg: '#F2EDE6' },
+  completed: { bg: '#3D7A50', fg: '#F2EDE6' },
+}
+
+// ── Detail row ─────────────────────────────────────────────────
+function Row({ label, value }: { label: string; value: string | null }) {
+  if (!value) return null
+  return (
+    <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap', marginBottom: '6px' }}>
+      <span style={{ fontSize: '9px', fontWeight: 700, color: '#8A6A4A', letterSpacing: '1px', minWidth: '110px' }}>
+        {label.toUpperCase()}
+      </span>
+      <span style={{ fontSize: '12px', color: '#1C1208', flex: 1 }}>{value}</span>
+    </div>
+  )
+}
+
+// ── Request detail fields ──────────────────────────────────────
+function RequestDetail({ r }: { r: Request }) {
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column' }}>
+      {r.request_type === 'event_permission' && (<>
+        <Row label="Event Date" value={r.event_date} />
+        <Row label="Subject" value={r.event_subject} />
+        <Row label="Content" value={r.event_content} />
+        <Row label="Signature" value={r.signature_confirm ? 'Confirmed by student' : 'Not confirmed'} />
+      </>)}
+      {r.request_type === 'complaint' && <Row label="Problem" value={r.problem_description} />}
+      {r.request_type === 'gate_pass' && (<>
+        <Row label="Date" value={r.gate_pass_date} />
+        <Row label="Reason" value={r.gate_pass_reason} />
+        <Row label="Return Time" value={r.gate_pass_return_time} />
+      </>)}
+      {r.request_type === 'suggestion' && <Row label="Suggestion" value={r.suggestion_text} />}
+      {r.request_type === 'bonafide' && (<>
+        <Row label="Purpose" value={r.bonafide_purpose} />
+        <Row label="Notes" value={r.bonafide_notes} />
+      </>)}
+      {r.request_type === 'lost_id_card' && (<>
+        <Row label="Lost On" value={r.lost_date} />
+        <Row label="Location" value={r.lost_location} />
+        <Row label="Description" value={r.lost_description} />
+      </>)}
+      {r.request_type === 'fees' && (<>
+        <Row label="Fee Type" value={
+          r.fee_name === 'year_long_fee' ? 'Year Long Fee'
+          : r.fee_name === 'semester_end_exam_fee' ? 'Semester End Exam Fee'
+          : r.fee_other_name ?? 'Other'
+        } />
+        {r.fee_amount != null && <Row label="Amount" value={`₹${r.fee_amount}`} />}
+      </>)}
+    </div>
+  )
+}
+
+// ── Main component ─────────────────────────────────────────────
 export default function ApprovalsPage() {
-  const [requests, setRequests] = useState<Req[]>([])
+  const supabase = createClient()
+  const [requests, setRequests] = useState<Request[]>([])
   const [loading, setLoading] = useState(true)
-  const [filter, setFilter] = useState<'active' | 'all'>('active')
+  const [filter, setFilter] = useState<'pending' | 'all'>('pending')
+  const [sectionFilter, setSectionFilter] = useState<'all' | 'hod' | 'admin'>('all')
   const [expanded, setExpanded] = useState<string | null>(null)
-  const [comment, setComment] = useState('')
+  const [adminNotes, setAdminNotes] = useState('')
+  const [adminDate, setAdminDate] = useState('')
+  const [pdfFile, setPdfFile] = useState<File | null>(null)
   const [acting, setActing] = useState(false)
   const [error, setError] = useState('')
-
-  const supabase = createClient()
+  const [successMsg, setSuccessMsg] = useState('')
+  const pdfRef = useRef<HTMLInputElement>(null)
 
   const fetchRequests = useCallback(async () => {
     setLoading(true)
     let query = supabase
       .from('requests')
-      .select('*, approval_steps(*), student:users!requests_student_id_fkey(full_name, roll_number, department)')
+      .select('*, student:users!requests_student_id_fkey(full_name, roll_number, department)')
       .order('submitted_at', { ascending: false })
 
-    if (filter === 'active') {
-      query = query.in('status', ['pending', 'in_review'])
-    }
+    if (filter === 'pending') query = query.in('status', ['pending', 'in_review'])
+    if (sectionFilter !== 'all') query = query.eq('section', sectionFilter)
 
     const { data, error } = await query
-    if (error) {
-      setError(error.message)
-    } else if (data) {
-      data.forEach((r: Req) =>
-        r.approval_steps?.sort((a, b) => a.step_number - b.step_number)
-      )
-      setRequests(data as Req[])
-      setError('')
-    }
+    if (error) setError(error.message)
+    else { setRequests((data as Request[]) ?? []); setError('') }
     setLoading(false)
-  }, [supabase, filter])
+  }, [filter, sectionFilter])
 
-  useEffect(() => {
-    fetchRequests()
-  }, [fetchRequests])
+  useEffect(() => { fetchRequests() }, [fetchRequests])
 
-  function currentStep(r: Req): Step | null {
-    return r.approval_steps?.find(s => s.status === 'pending') ?? null
+  function openExpand(id: string) {
+    const r = requests.find(x => x.id === id)
+    setExpanded(id)
+    setAdminNotes(r?.admin_notes ?? '')
+    setAdminDate(r?.admin_set_date ? new Date(r.admin_set_date).toISOString().slice(0, 16) : '')
+    setPdfFile(null)
+    setError('')
+    setSuccessMsg('')
   }
 
-  async function act(r: Req, decision: 'approved' | 'rejected') {
-    const step = currentStep(r)
-    if (!step) return
-
+  async function handleAct(r: Request, newStatus: string) {
     setActing(true)
     setError('')
+    setSuccessMsg('')
 
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) { setError('Not signed in'); setActing(false); return }
-
-    // 1 — update the step
-    const { error: stepError } = await supabase
-      .from('approval_steps')
-      .update({
-        status: decision,
-        approver_id: user.id,
-        comments: comment.trim() || null,
-        acted_at: new Date().toISOString(),
-      })
-      .eq('id', step.id)
-
-    if (stepError) {
-      setError('Step update failed: ' + stepError.message)
-      setActing(false)
-      return
+    // Upload PDF if provided
+    let pdfUrl = r.generated_pdf_url
+    if (pdfFile) {
+      const { data: { user } } = await supabase.auth.getUser()
+      const path = `generated/${r.id}/${pdfFile.name}`
+      const { error: upErr } = await supabase.storage
+        .from('request-attachments')
+        .upload(path, pdfFile, { upsert: true })
+      if (upErr) { setError('PDF upload failed: ' + upErr.message); setActing(false); return }
+      const { data } = supabase.storage.from('request-attachments').getPublicUrl(path)
+      pdfUrl = data.publicUrl
     }
 
-    // 2 — work out the new request status
-    let newStatus: string
-    if (decision === 'rejected') {
-      newStatus = 'rejected'
-    } else {
-      const remaining = r.approval_steps.filter(
-        s => s.id !== step.id && s.status === 'pending'
-      ).length
-      newStatus = remaining === 0 ? 'approved' : 'in_review'
-    }
-
-    const { error: reqError } = await supabase
+    const { error: dbErr } = await supabase
       .from('requests')
-      .update({ status: newStatus })
+      .update({
+        status: newStatus,
+        admin_notes: adminNotes.trim() || null,
+        admin_set_date: adminDate ? new Date(adminDate).toISOString() : null,
+        generated_pdf_url: pdfUrl,
+      })
       .eq('id', r.id)
 
-    if (reqError) {
-      setError('Request update failed: ' + reqError.message)
-      setActing(false)
-      return
-    }
+    if (dbErr) { setError('Update failed: ' + dbErr.message); setActing(false); return }
 
-    // 3 — generate the PDF document on final approval
-    if (newStatus === 'approved') {
-      try {
-        const pdfRes = await fetch('/api/generate-document', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ requestId: r.id }),
-        })
-        const pdfData = await pdfRes.json()
-        console.log('PDF GEN RESULT:', pdfRes.status, pdfData)
-      } catch (e) {
-        console.log('PDF GEN FETCH ERROR:', e)
-      }
-    }
-
-    setComment('')
+    setSuccessMsg(`Request ${newStatus}.`)
     setExpanded(null)
     setActing(false)
     fetchRequests()
@@ -154,227 +193,238 @@ export default function ApprovalsPage() {
     weekday: 'short', day: '2-digit', month: 'short', year: 'numeric',
   }).toUpperCase()
 
-  const activeCount = requests.filter(r => r.status === 'pending' || r.status === 'in_review').length
+  const pendingCount = requests.filter(r => r.status === 'pending' || r.status === 'in_review').length
+
+  const inputStyle: React.CSSProperties = {
+    width: '100%', border: '1px solid #4A3020', background: '#261A0A',
+    padding: '9px 11px', fontSize: '11px', color: '#E8C87A',
+    outline: 'none', borderRadius: 0, fontFamily: 'inherit', display: 'block',
+  }
 
   return (
     <>
       <header style={{
-        height: '48px', borderBottom: '2px solid #1C1208',
+        minHeight: '48px', borderBottom: '2px solid #1C1208',
         display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-        padding: '0 24px', background: '#F2EDE6', flexShrink: 0,
+        padding: '0 clamp(12px,4vw,24px)', background: '#F2EDE6',
+        flexShrink: 0, flexWrap: 'wrap', gap: '4px',
       }}>
         <div style={{ display: 'flex', alignItems: 'baseline', gap: '12px' }}>
-          <span style={{ fontSize: '13px', fontWeight: 700, color: '#1C1208', letterSpacing: '0.5px' }}>
-            APPROVALS
-          </span>
+          <span style={{ fontSize: '13px', fontWeight: 700, color: '#1C1208', letterSpacing: '0.5px' }}>APPROVALS</span>
           <span style={{ fontSize: '11px', color: '#C8A878' }}>/</span>
-          <span style={{ fontSize: '11px', color: '#8A6A4A' }}>
-            {activeCount} awaiting action
-          </span>
+          <span style={{ fontSize: '11px', color: '#8A6A4A' }}>{pendingCount} awaiting action</span>
         </div>
-        <span style={{
-          fontSize: '10px', color: '#6A4A2A', background: '#E8DDD0',
-          padding: '4px 10px', letterSpacing: '0.5px',
-        }}>
-          {today}
-        </span>
+        <span style={{ fontSize: '10px', color: '#6A4A2A', background: '#E8DDD0', padding: '4px 10px' }}>{today}</span>
       </header>
 
-      <main style={{ flex: 1, padding: '20px 24px', display: 'flex', flexDirection: 'column', gap: '16px', overflowY: 'auto' }}>
+      <main style={{
+        flex: 1, overflowY: 'auto',
+        padding: 'clamp(12px,4vw,20px) clamp(12px,4vw,24px)',
+        display: 'flex', flexDirection: 'column', gap: '16px',
+      }}>
 
         {/* Filter bar */}
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <h1 style={{ fontSize: '18px', fontWeight: 700, color: '#1C1208', margin: 0, letterSpacing: '0.5px' }}>
-            Request queue
-          </h1>
-          <div style={{ display: 'flex', border: '1.5px solid #1C1208' }}>
-            {(['active', 'all'] as const).map((f, i) => (
-              <button
-                key={f}
-                type="button"
-                onClick={() => setFilter(f)}
-                style={{
-                  padding: '7px 18px', fontSize: '9px', fontWeight: 700,
-                  letterSpacing: '1.5px', cursor: 'pointer', fontFamily: 'inherit',
-                  border: 'none',
+        <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between' }}>
+          <h1 style={{ fontSize: '18px', fontWeight: 700, color: '#1C1208', margin: 0 }}>Request queue</h1>
+          <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+            {/* Status filter */}
+            <div style={{ display: 'flex', border: '1.5px solid #1C1208' }}>
+              {(['pending', 'all'] as const).map((f, i) => (
+                <button key={f} type="button" onClick={() => setFilter(f)} style={{
+                  padding: '7px 14px', fontSize: '9px', fontWeight: 700, letterSpacing: '1px',
+                  cursor: 'pointer', fontFamily: 'inherit', border: 'none',
                   borderRight: i === 0 ? '1.5px solid #1C1208' : 'none',
                   background: filter === f ? '#1C1208' : '#F2EDE6',
                   color: filter === f ? '#F2EDE6' : '#8A6A4A',
-                }}
-              >
-                {f.toUpperCase()}
-              </button>
-            ))}
+                }}>
+                  {f === 'pending' ? 'ACTIVE' : 'ALL'}
+                </button>
+              ))}
+            </div>
+            {/* Section filter */}
+            <div style={{ display: 'flex', border: '1.5px solid #1C1208' }}>
+              {(['all', 'hod', 'admin'] as const).map((f, i) => (
+                <button key={f} type="button" onClick={() => setSectionFilter(f)} style={{
+                  padding: '7px 14px', fontSize: '9px', fontWeight: 700, letterSpacing: '1px',
+                  cursor: 'pointer', fontFamily: 'inherit', border: 'none',
+                  borderRight: i < 2 ? '1.5px solid #1C1208' : 'none',
+                  background: sectionFilter === f ? '#1C1208' : '#F2EDE6',
+                  color: sectionFilter === f ? '#F2EDE6' : '#8A6A4A',
+                }}>
+                  {f.toUpperCase()}
+                </button>
+              ))}
+            </div>
           </div>
         </div>
 
+        {successMsg && (
+          <div style={{ fontSize: '11px', color: '#3D7A50', borderLeft: '2px solid #3D7A50', paddingLeft: '10px' }}>{successMsg}</div>
+        )}
         {error && (
-          <div style={{ border: '1.5px solid #D94F00', background: '#FDFAF5', padding: '14px 16px' }}>
-            <div style={{ fontSize: '11px', color: '#D94F00' }}>{error}</div>
-          </div>
+          <div style={{ fontSize: '11px', color: '#D94F00', borderLeft: '2px solid #D94F00', paddingLeft: '10px' }}>{error}</div>
         )}
 
         {loading ? (
-          <div style={{ fontSize: '11px', color: '#8A6A4A', letterSpacing: '1px', padding: '20px 0' }}>
-            LOADING...
-          </div>
+          <div style={{ fontSize: '11px', color: '#8A6A4A', padding: '20px 0' }}>LOADING...</div>
         ) : requests.length === 0 ? (
-          <div style={{
-            border: '1.5px solid #1C1208', background: '#FDFAF5',
-            padding: '40px', textAlign: 'center',
-          }}>
+          <div style={{ border: '1.5px solid #1C1208', background: '#FDFAF5', padding: '40px', textAlign: 'center' }}>
             <div style={{ fontSize: '13px', fontWeight: 700, color: '#1C1208', marginBottom: '6px' }}>
-              {filter === 'active' ? 'Queue is clear' : 'No requests'}
+              {filter === 'pending' ? 'Queue is clear' : 'No requests yet'}
             </div>
             <div style={{ fontSize: '11px', color: '#8A6A4A' }}>
-              {filter === 'active' ? 'No requests awaiting your action.' : 'No requests have been submitted yet.'}
+              {filter === 'pending' ? 'No requests awaiting your action.' : 'No requests have been submitted.'}
             </div>
           </div>
         ) : (
           <div style={{ border: '1.5px solid #1C1208' }}>
             {requests.map((r, i) => {
-              const st = STATUS_STYLE[r.status] ?? STATUS_STYLE.pending
+              const st = STATUS_COLOR[r.status] ?? STATUS_COLOR.pending
               const isOpen = expanded === r.id
-              const step = currentStep(r)
+              const needsDate = r.request_type === 'lost_id_card' || r.request_type === 'bonafide' || r.request_type === 'fees'
+              const needsPdf = r.request_type === 'bonafide' || r.request_type === 'fees'
+
               return (
-                <div key={r.id} style={{
-                  borderBottom: i < requests.length - 1 ? '1px solid #E0D0B8' : 'none',
-                  background: '#FDFAF5',
-                }}>
+                <div key={r.id} style={{ borderBottom: i < requests.length - 1 ? '1px solid #E0D0B8' : 'none', background: '#FDFAF5' }}>
                   {/* Row */}
                   <div
-                    onClick={() => { setExpanded(isOpen ? null : r.id); setComment(''); setError('') }}
-                    style={{
-                      display: 'flex', alignItems: 'center', gap: '14px',
-                      padding: '14px 16px', cursor: 'pointer',
-                    }}
+                    onClick={() => isOpen ? setExpanded(null) : openExpand(r.id)}
+                    style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '14px 16px', cursor: 'pointer', flexWrap: 'wrap' }}
                   >
-                    <div style={{ flex: 1 }}>
-                      <div style={{ fontSize: '12px', fontWeight: 700, color: '#1C1208', letterSpacing: '0.5px' }}>
-                        {r.title}
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontSize: '12px', fontWeight: 700, color: '#1C1208' }}>
+                        {TYPE_LABELS[r.request_type]}
                         <span style={{ fontWeight: 400, color: '#8A6A4A' }}>
                           {' — '}{r.student?.full_name ?? 'Unknown'}
                           {r.student?.roll_number ? ` (${r.student.roll_number})` : ''}
                         </span>
                       </div>
                       <div style={{ fontSize: '10px', color: '#8A6A4A', marginTop: '2px' }}>
-                        {r.student?.department ?? ''} · Submitted{' '}
-                        {new Date(r.submitted_at).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' })}
-                        {step ? ` · Awaiting: ${step.step_label}` : ''}
+                        {r.student?.department ?? ''} · {r.section.toUpperCase()} ·{' '}
+                        {new Date(r.submitted_at).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
                       </div>
                     </div>
                     <span style={{
                       fontSize: '9px', fontWeight: 700, letterSpacing: '1px',
-                      padding: '3px 9px', background: st.bg, color: st.fg,
+                      padding: '3px 9px', background: st.bg, color: st.fg, flexShrink: 0,
                     }}>
                       {r.status.replace('_', ' ').toUpperCase()}
                     </span>
                     <span style={{ fontSize: '11px', color: '#8A6A4A' }}>{isOpen ? '▴' : '▾'}</span>
                   </div>
 
-                  {/* Expanded */}
+                  {/* Expanded panel */}
                   {isOpen && (
-                    <div style={{ padding: '0 16px 16px' }}>
-                      <div style={{ borderTop: '1px solid #E0D0B8', paddingTop: '14px', display: 'flex', flexDirection: 'column', gap: '14px' }}>
+                    <div style={{ borderTop: '1px solid #E0D0B8', padding: '16px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
 
-                        {/* Request details */}
-                        {r.metadata && Object.keys(r.metadata).length > 0 && (
-                          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: '10px' }}>
-                            {Object.entries(r.metadata).map(([k, v]) => (
-                              <div key={k}>
-                                <div style={{ fontSize: '8px', fontWeight: 700, letterSpacing: '1.5px', color: '#8A6A4A' }}>
-                                  {k.replace(/_/g, ' ').toUpperCase()}
-                                </div>
-                                <div style={{ fontSize: '12px', color: '#1C1208', marginTop: '2px' }}>{v}</div>
-                              </div>
-                            ))}
-                          </div>
-                        )}
+                      {/* Student details */}
+                      <RequestDetail r={r} />
 
-                        {r.description && (
-                          <div style={{ fontSize: '11px', color: '#6A4A2A', borderLeft: '2px solid #C8A878', paddingLeft: '10px' }}>
-                            {r.description}
-                          </div>
-                        )}
-
-                        {/* Steps timeline */}
+                      {/* Payment screenshot */}
+                      {r.payment_screenshot_url && (
                         <div>
-                          <div style={{ fontSize: '9px', fontWeight: 700, letterSpacing: '1.5px', color: '#8A6A4A', marginBottom: '10px' }}>
-                            APPROVAL STEPS
-                          </div>
-                          {r.approval_steps.map(s => (
-                            <div key={s.id} style={{ display: 'flex', gap: '10px', alignItems: 'center', marginBottom: '7px' }}>
-                              <div style={{
-                                width: '16px', height: '16px', flexShrink: 0,
-                                background:
-                                  s.status === 'approved' ? '#3D7A50' :
-                                  s.status === 'rejected' ? '#D94F00' : '#E0D0B8',
-                                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                fontSize: '9px', color: '#F2EDE6', fontWeight: 700,
-                              }}>
-                                {s.status === 'approved' ? '✓' : s.status === 'rejected' ? '✕' : s.step_number}
-                              </div>
-                              <div style={{ fontSize: '11px', color: '#1C1208', fontWeight: s.status === 'pending' ? 700 : 400 }}>
-                                {s.step_label}
-                              </div>
-                              {s.comments && (
-                                <div style={{ fontSize: '10px', color: '#8A6A4A' }}>— &ldquo;{s.comments}&rdquo;</div>
-                              )}
-                            </div>
-                          ))}
+                          <div style={{ fontSize: '9px', fontWeight: 700, color: '#8A6A4A', letterSpacing: '1px', marginBottom: '6px' }}>PAYMENT SCREENSHOT</div>
+                          <a href={r.payment_screenshot_url} target="_blank" rel="noopener noreferrer" style={{
+                            fontSize: '11px', color: '#D94F00', textDecoration: 'none', fontWeight: 700,
+                          }}>
+                            VIEW SCREENSHOT ↗
+                          </a>
+                        </div>
+                      )}
+
+                      {/* Action panel */}
+                      <div style={{ background: '#1C1208', padding: '16px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                        <div style={{ fontSize: '8px', fontWeight: 700, letterSpacing: '2px', color: '#6A4A2A' }}>
+                          TAKE ACTION
                         </div>
 
-                        {/* Action panel — only if there's a pending step */}
-                        {step && (
-                          <div style={{ background: '#1C1208', padding: '14px 16px' }}>
-                            <div style={{ fontSize: '8px', fontWeight: 700, letterSpacing: '2px', color: '#6A4A2A', marginBottom: '8px' }}>
-                              ACT AS: {step.step_label.toUpperCase()}
+                        <div>
+                          <div style={{ fontSize: '9px', color: '#8A6A4A', letterSpacing: '1px', marginBottom: '6px' }}>MESSAGE TO STUDENT (OPTIONAL)</div>
+                          <textarea
+                            value={adminNotes}
+                            onChange={e => setAdminNotes(e.target.value)}
+                            placeholder="e.g. Your request has been approved. Please collect..."
+                            rows={3}
+                            style={{ ...inputStyle, resize: 'vertical' }}
+                          />
+                        </div>
+
+                        {needsDate && (
+                          <div>
+                            <div style={{ fontSize: '9px', color: '#8A6A4A', letterSpacing: '1px', marginBottom: '6px' }}>
+                              {r.request_type === 'lost_id_card' ? 'ID CARD COLLECTION DATE & TIME' : 'DOCUMENT READY DATE & TIME'}
                             </div>
                             <input
-                              type="text"
-                              value={comment}
-                              onChange={e => setComment(e.target.value)}
-                              placeholder="Comment (optional)"
-                              style={{
-                                width: '100%', border: '1px solid #4A3020',
-                                background: '#261A0A', padding: '9px 11px',
-                                fontSize: '11px', color: '#E8C87A',
-                                outline: 'none', borderRadius: 0, fontFamily: 'inherit',
-                                marginBottom: '10px', display: 'block',
-                              }}
+                              type="datetime-local"
+                              value={adminDate}
+                              onChange={e => setAdminDate(e.target.value)}
+                              style={inputStyle}
                             />
-                            <div style={{ display: 'flex', gap: '8px' }}>
-                              <button
-                                type="button"
-                                onClick={() => act(r, 'approved')}
-                                disabled={acting}
-                                style={{
-                                  flex: 1, background: '#3D7A50', color: '#F2EDE6',
-                                  border: 'none', padding: '10px', fontSize: '9px',
-                                  fontWeight: 700, letterSpacing: '2px',
-                                  cursor: acting ? 'not-allowed' : 'pointer', fontFamily: 'inherit',
-                                }}
-                              >
-                                {acting ? '...' : '✓ APPROVE'}
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => act(r, 'rejected')}
-                                disabled={acting}
-                                style={{
-                                  flex: 1, background: '#D94F00', color: '#F2EDE6',
-                                  border: 'none', padding: '10px', fontSize: '9px',
-                                  fontWeight: 700, letterSpacing: '2px',
-                                  cursor: acting ? 'not-allowed' : 'pointer', fontFamily: 'inherit',
-                                }}
-                              >
-                                {acting ? '...' : '✕ REJECT'}
-                              </button>
-                            </div>
                           </div>
                         )}
 
+                        {needsPdf && (
+                          <div>
+                            <div style={{ fontSize: '9px', color: '#8A6A4A', letterSpacing: '1px', marginBottom: '6px' }}>
+                              UPLOAD GENERATED {r.request_type === 'bonafide' ? 'BONAFIDE' : 'RECEIPT'} PDF
+                            </div>
+                            <div
+                              onClick={() => pdfRef.current?.click()}
+                              style={{
+                                border: '1px dashed #4A3020', padding: '14px', textAlign: 'center',
+                                cursor: 'pointer', background: '#261A0A',
+                              }}
+                            >
+                              {pdfFile
+                                ? <span style={{ fontSize: '11px', color: '#3D7A50', fontWeight: 700 }}>✓ {pdfFile.name}</span>
+                                : <span style={{ fontSize: '11px', color: '#6A4A2A' }}>Click to upload PDF</span>
+                              }
+                            </div>
+                            <input ref={pdfRef} type="file" accept="application/pdf" style={{ display: 'none' }}
+                              onChange={e => { const f = e.target.files?.[0]; if (f) setPdfFile(f) }} />
+                            {r.generated_pdf_url && (
+                              <div style={{ marginTop: '6px', fontSize: '10px', color: '#6A4A2A' }}>
+                                Previously uploaded:{' '}
+                                <a href={r.generated_pdf_url} target="_blank" rel="noopener noreferrer" style={{ color: '#E8C87A' }}>
+                                  view ↗
+                                </a>
+                              </div>
+                            )}
+                          </div>
+                        )}
+
+                        <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                          <button type="button" onClick={() => handleAct(r, 'in_review')} disabled={acting} style={{
+                            flex: 1, minWidth: '80px', background: '#4A3020', color: '#E8C87A',
+                            border: 'none', padding: '10px', fontSize: '9px', fontWeight: 700,
+                            letterSpacing: '1.5px', cursor: acting ? 'not-allowed' : 'pointer', fontFamily: 'inherit',
+                          }}>
+                            IN REVIEW
+                          </button>
+                          <button type="button" onClick={() => handleAct(r, 'approved')} disabled={acting} style={{
+                            flex: 1, minWidth: '80px', background: '#3D7A50', color: '#F2EDE6',
+                            border: 'none', padding: '10px', fontSize: '9px', fontWeight: 700,
+                            letterSpacing: '1.5px', cursor: acting ? 'not-allowed' : 'pointer', fontFamily: 'inherit',
+                          }}>
+                            {acting ? '...' : '✓ APPROVE'}
+                          </button>
+                          <button type="button" onClick={() => handleAct(r, 'rejected')} disabled={acting} style={{
+                            flex: 1, minWidth: '80px', background: '#D94F00', color: '#F2EDE6',
+                            border: 'none', padding: '10px', fontSize: '9px', fontWeight: 700,
+                            letterSpacing: '1.5px', cursor: acting ? 'not-allowed' : 'pointer', fontFamily: 'inherit',
+                          }}>
+                            {acting ? '...' : '✕ REJECT'}
+                          </button>
+                          <button type="button" onClick={() => handleAct(r, 'completed')} disabled={acting} style={{
+                            flex: 1, minWidth: '80px', background: '#1C3828', color: '#6AAA70',
+                            border: '1px solid #3D7A50', padding: '10px', fontSize: '9px', fontWeight: 700,
+                            letterSpacing: '1.5px', cursor: acting ? 'not-allowed' : 'pointer', fontFamily: 'inherit',
+                          }}>
+                            {acting ? '...' : '✓✓ COMPLETE'}
+                          </button>
+                        </div>
                       </div>
+
                     </div>
                   )}
                 </div>
@@ -382,7 +432,6 @@ export default function ApprovalsPage() {
             })}
           </div>
         )}
-
       </main>
     </>
   )

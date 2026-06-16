@@ -1,5 +1,6 @@
 import { createServerSupabaseClient } from '@/lib/supabase/server'
 import VerifyEmailBanner from '@/components/VerifyEmailBanner'
+import DashboardTabs from '@/components/DashboardTabs'
 
 function greeting() {
   const h = new Date().getHours()
@@ -15,11 +16,10 @@ export default async function DashboardPage() {
 
   const { data: profile } = await supabase
     .from('users')
-    .select('full_name, department, year, section, roll_number, email_verified_at, created_at')
+    .select('full_name, department, year, section, roll_number, email_verified_at, created_at, blood_group, phone_number, skills, profile_photo_url, email')
     .eq('id', user!.id)
     .single()
 
-  // Counts (will be 0 until subjects/deadlines/requests pages are built)
   const { count: subjectCount } = await supabase
     .from('subjects')
     .select('*', { count: 'exact', head: true })
@@ -55,7 +55,8 @@ export default async function DashboardPage() {
     { label: 'AI PLANNER', value: '—', flag: 'SETUP NEEDED', flagColor: '#D94F00' },
   ]
 
-  return (
+  // The overview content is server-rendered and passed as a prop into the client DashboardTabs component
+  const overviewContent = (
     <>
       {/* Topbar */}
       <header style={{
@@ -81,17 +82,14 @@ export default async function DashboardPage() {
         </span>
       </header>
 
-      {/* Content */}
-      <main style={{ flex: 1, padding: 'clamp(12px, 4vw, 20px) clamp(12px, 4vw, 24px)', display: 'flex', flexDirection: 'column', gap: '16px', overflowY: 'auto' }}>
+      <div style={{ flex: 1, padding: 'clamp(12px, 4vw, 20px) clamp(12px, 4vw, 24px)', display: 'flex', flexDirection: 'column', gap: '16px' }}>
 
-        {/* Email verification banner — hides itself once verified */}
         <VerifyEmailBanner
           email={user!.email!}
           verified={!!profile?.email_verified_at}
           daysLeft={daysLeft}
         />
 
-        {/* Greeting */}
         <div>
           <h1 style={{ fontSize: '20px', fontWeight: 700, color: '#1C1208', margin: 0, letterSpacing: '0.5px' }}>
             {greeting()}, {firstName}
@@ -101,16 +99,12 @@ export default async function DashboardPage() {
           </p>
         </div>
 
-        {/* KPI strip */}
         <div style={{
           display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))',
           gap: '8px',
         }}>
           {kpis.map((kpi) => (
-            <div key={kpi.label} style={{
-              padding: '14px 16px',
-              border: '1.5px solid #1C1208',
-            }}>
+            <div key={kpi.label} style={{ padding: '14px 16px', border: '1.5px solid #1C1208' }}>
               <div style={{ fontSize: '9px', letterSpacing: '1.5px', color: '#8A6A4A', marginBottom: '8px', fontWeight: 700 }}>
                 {kpi.label}
               </div>
@@ -129,7 +123,6 @@ export default async function DashboardPage() {
           ))}
         </div>
 
-        {/* Getting started panel */}
         <div style={{ border: '1.5px solid #1C1208', background: '#FDFAF5' }}>
           <div style={{
             borderBottom: '1px solid #D4C8B8', padding: '12px 18px',
@@ -172,7 +165,29 @@ export default async function DashboardPage() {
           </div>
         </div>
 
-      </main>
+      </div>
     </>
+  )
+
+  return (
+    <DashboardTabs
+      profile={{
+        id: user!.id,
+        full_name: profile?.full_name ?? '',
+        email: profile?.email ?? user!.email ?? '',
+        department: profile?.department ?? '',
+        year: profile?.year ?? null,
+        section: profile?.section ?? null,
+        roll_number: profile?.roll_number ?? null,
+        blood_group: profile?.blood_group ?? null,
+        phone_number: profile?.phone_number ?? null,
+        skills: profile?.skills ?? null,
+        profile_photo_url: profile?.profile_photo_url ?? null,
+        email_verified_at: profile?.email_verified_at ?? null,
+        created_at: profile?.created_at ?? '',
+      }}
+      userId={user!.id}
+      overviewContent={overviewContent}
+    />
   )
 }
