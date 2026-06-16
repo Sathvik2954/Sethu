@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useRef, useEffect } from 'react'
+import { useState, useRef, useEffect, useCallback } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import AccountsTab from '@/components/AccountsTab'
 
@@ -281,6 +281,69 @@ export default function DashboardTabs({ profile, userId, overviewContent, isAdmi
     setPersonal(p => ({ ...p, skillInput: '' }))
   }
 
+  // ── Notification bell state ────────────────────────────────
+  const [bellOpen, setBellOpen] = useState(false)
+  const [notifications, setNotifications] = useState<Array<{
+    id: string; title: string; message: string; priority: string;
+    created_at: string; sender_name?: string; is_read?: boolean
+  }>>([])
+  const [unreadCount, setUnreadCount] = useState(0)
+  const [notifsLoaded, setNotifsLoaded] = useState(false)
+
+  const loadNotifications = useCallback(async () => {
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return
+
+    const { data: notifs } = await supabase
+      .from('notifications')
+      .select('*')
+      .order('created_at', { ascending: false })
+      .limit(20)
+
+    const { data: reads } = await supabase
+      .from('notification_reads')
+      .select('notification_id')
+      .eq('user_id', user.id)
+
+    const readSet = new Set((reads ?? []).map((r: { notification_id: string }) => r.notification_id))
+
+    const senderIds = [...new Set((notifs ?? []).map((n: { sender_id: string }) => n.sender_id))]
+    let senderMap: Record<string, string> = {}
+    if (senderIds.length > 0) {
+      const { data: senders } = await supabase.from('users').select('id, full_name').in('id', senderIds)
+      senderMap = Object.fromEntries((senders ?? []).map((s: { id: string; full_name: string }) => [s.id, s.full_name]))
+    }
+
+    const enriched = (notifs ?? []).map((n: { id: string; sender_id: string; title: string; message: string; priority: string; created_at: string }) => ({
+      ...n,
+      sender_name: senderMap[n.sender_id] ?? 'Staff',
+      is_read: readSet.has(n.id),
+    }))
+
+    setNotifications(enriched)
+    setUnreadCount(enriched.filter((n: { is_read?: boolean }) => !n.is_read).length)
+    setNotifsLoaded(true)
+  }, [supabase])
+
+  async function markAllRead() {
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return
+    const unread = notifications.filter(n => !n.is_read)
+    if (unread.length === 0) return
+    await supabase.from('notification_reads').upsert(
+      unread.map(n => ({ user_id: user.id, notification_id: n.id }))
+    )
+    setNotifications(prev => prev.map(n => ({ ...n, is_read: true })))
+    setUnreadCount(0)
+  }
+
+  function openBell() {
+    setBellOpen(true)
+    if (!notifsLoaded) loadNotifications()
+    // Mark all read after a short delay
+    setTimeout(markAllRead, 1500)
+  }
+
   const tabStyle = (active: boolean): React.CSSProperties => ({
     flex: 1, padding: '10px', fontSize: '9px', fontWeight: 700, letterSpacing: '1.5px',
     background: active ? '#1C1208' : '#F2EDE6',
@@ -290,16 +353,115 @@ export default function DashboardTabs({ profile, userId, overviewContent, isAdmi
   })
 
   return (
-    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', position: 'relative' }}>
 
       {/* Tab bar */}
-      <div style={{ display: 'flex', borderBottom: '2px solid #1C1208', background: '#F2EDE6', flexShrink: 0 }}>
+      <div style={{ display: 'flex', borderBottom: '2px solid #1C1208', background: '#F2EDE6', flexShrink: 0, alignItems: 'stretch' }}>
         <button type="button" onClick={() => setTab('overview')} style={tabStyle(tab === 'overview')}>OVERVIEW</button>
         <button type="button" onClick={() => setTab('profile')} style={tabStyle(tab === 'profile')}>MY PROFILE</button>
         {isAdmin && (
           <button type="button" onClick={() => setTab('accounts')} style={tabStyle(tab === 'accounts')}>ACCOUNTS</button>
         )}
+        {/* Bell icon */}
+        <button type="button" onClick={openBell} style={{
+          position: 'relative', background: 'transparent', border: 'none',
+          padding: '0 16px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
+          borderLeft: '1px solid #E0D0B8', flexShrink: 0,
+        }}>
+          <span style={{ fontSize: '18px', lineHeight: 1 }}>🔔</span>
+          {unreadCount > 0 && (
+            <span style={{
+              position: 'absolute', top: '6px', right: '8px',
+              background: '#D94F00', color: '#F2EDE6',
+              fontSize: '8px', fontWeight: 700, borderRadius: '50%',
+              width: '16px', height: '16px', display: 'flex',
+              alignItems: 'center', justifyContent: 'center', lineHeight: 1,
+            }}>
+              {unreadCount > 9 ? '9+' : unreadCount}
+            </span>
+          )}
+        </button>
       </div>
+
+      {/* Notification drawer */}
+      {bellOpen && (
+        <>
+          {/* Backdrop */}
+          <div onClick={() => setBellOpen(false)} style={{
+            position: 'fixed', inset: 0, zIndex: 90,
+            background: 'rgba(28,18,8,0.3)',
+          }} />
+          {/* Drawer */}
+          <div style={{
+            position: 'fixed', top: 0, right: 0, bottom: 0,
+            width: 'min(380px, 92vw)', background: '#FDFAF5',
+            borderLeft: '2px solid #1C1208', zIndex: 100,
+            display: 'flex', flexDirection: 'column',
+            boxShadow: '-4px 0 20px rgba(28,18,8,0.15)',
+          }}>
+            {/* Drawer header */}
+            <div style={{
+              display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+              padding: '16px 20px', borderBottom: '1.5px solid #1C1208',
+              background: '#1C1208', flexShrink: 0,
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                <span style={{ fontSize: '14px', fontWeight: 700, color: '#F2EDE6', letterSpacing: '1px' }}>NOTIFICATIONS</span>
+                {unreadCount > 0 && (
+                  <span style={{ background: '#D94F00', color: '#F2EDE6', fontSize: '8px', fontWeight: 700, padding: '2px 7px', letterSpacing: '1px' }}>
+                    {unreadCount} NEW
+                  </span>
+                )}
+              </div>
+              <button type="button" onClick={() => setBellOpen(false)} style={{
+                background: 'transparent', border: 'none', color: '#8A6A4A',
+                fontSize: '18px', cursor: 'pointer', lineHeight: 1, fontFamily: 'inherit',
+              }}>✕</button>
+            </div>
+
+            {/* Notifications list */}
+            <div style={{ flex: 1, overflowY: 'auto', padding: '12px' }}>
+              {!notifsLoaded ? (
+                <div style={{ fontSize: '11px', color: '#8A6A4A', padding: '20px', textAlign: 'center' }}>Loading...</div>
+              ) : notifications.length === 0 ? (
+                <div style={{ fontSize: '12px', color: '#8A6A4A', padding: '40px 20px', textAlign: 'center' }}>
+                  <div style={{ fontSize: '24px', marginBottom: '10px' }}>🔔</div>
+                  No notifications yet
+                </div>
+              ) : notifications.map(n => (
+                <div key={n.id} style={{
+                  padding: '12px 14px', marginBottom: '8px',
+                  border: `1.5px solid ${n.priority === 'urgent' ? '#D94F00' : '#1C1208'}`,
+                  background: n.is_read ? '#F2EDE6' : '#FFF8F2',
+                }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '7px', marginBottom: '5px', flexWrap: 'wrap' }}>
+                    {!n.is_read && <div style={{ width: '7px', height: '7px', borderRadius: '50%', background: '#D94F00', flexShrink: 0 }} />}
+                    {n.priority === 'urgent' && (
+                      <span style={{ fontSize: '7px', fontWeight: 700, letterSpacing: '1px', padding: '1px 6px', background: '#D94F00', color: '#F2EDE6' }}>URGENT</span>
+                    )}
+                    <span style={{ fontSize: '12px', fontWeight: n.is_read ? 400 : 700, color: '#1C1208', flex: 1 }}>{n.title}</span>
+                  </div>
+                  <div style={{ fontSize: '11px', color: '#1C1208', lineHeight: 1.6, marginBottom: '6px' }}>{n.message}</div>
+                  <div style={{ fontSize: '9px', color: '#8A6A4A' }}>
+                    {n.sender_name} · {new Date(n.created_at).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' })}
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* View all link */}
+            <div style={{ padding: '12px 20px', borderTop: '1px solid #E0D0B8', flexShrink: 0 }}>
+              <a href="/notifications" onClick={() => setBellOpen(false)} style={{
+                display: 'block', textAlign: 'center', fontSize: '10px', fontWeight: 700,
+                letterSpacing: '1.5px', color: '#D94F00', textDecoration: 'none',
+                padding: '10px', border: '1.5px solid #D94F00',
+              }}>
+                VIEW ALL NOTIFICATIONS →
+              </a>
+            </div>
+          </div>
+        </>
+      )}
 
       {/* Overview */}
       {tab === 'overview' && (
