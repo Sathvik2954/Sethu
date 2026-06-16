@@ -1,19 +1,36 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { createClient } from '@/lib/supabase/client'
 
+// ── Types ──────────────────────────────────────────────────────
 type Slot = {
   id: string
-  subject_id: string | null
-  day_of_week: number
-  start_time: string
-  end_time: string
-  slot_type: 'class' | 'lab' | 'free' | 'break'
+  timetable_type: 'class' | 'exam'
+  department: string
+  year: number
+  section: string
+  day: string | null
+  slot_label: string | null
+  subject_code: string | null
+  subject_name: string | null
+  faculty_name: string | null
   room: string | null
+  exam_date: string | null
+  exam_start_time: string | null
+  exam_end_time: string | null
+  exam_subject: string | null
+  exam_room: string | null
+  is_active: boolean
 }
 
-type Subject = { id: string; code: string; name: string }
+type UserInfo = {
+  id: string
+  role: string
+  department: string
+  year: number | null
+  section: string | null
+}
 
 type ParsedSlot = {
   day_of_week: number
@@ -27,576 +44,686 @@ type ParsedSlot = {
 }
 
 const DAYS = ['MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT']
+const DEPARTMENTS = ['CSE','AIML','CET','AIDS','IT','ECE','EEE','MECH','CIVIL','BIO TECH']
 
-const SLOT_STYLE: Record<string, { bg: string; border: string; fg: string; sub: string }> = {
-  class: { bg: '#FDFAF5', border: '#E0D0B8', fg: '#1C1208', sub: '#8A6A4A' },
-  lab:   { bg: '#E8DDD0', border: '#C8A878', fg: '#1C1208', sub: '#6A4A2A' },
-  free:  { bg: '#1C1208', border: '#1C1208', fg: '#D94F00', sub: '#6A4A2A' },
-  break: { bg: '#F2EDE6', border: '#E0D0B8', fg: '#8A6A4A', sub: '#C8A878' },
+const inp: React.CSSProperties = {
+  width: '100%', border: '1.5px solid #C8A878', background: '#F2EDE6',
+  padding: '9px 12px', fontSize: '13px', color: '#1C1208',
+  outline: 'none', borderRadius: 0, fontFamily: 'inherit', display: 'block',
+}
+const lbl: React.CSSProperties = {
+  fontSize: '9px', fontWeight: 700, letterSpacing: '1.5px',
+  color: '#6A4A2A', marginBottom: '5px', display: 'block',
 }
 
+function emptyClass() {
+  return { day: 'MON', slot_label: '', subject_code: '', subject_name: '', faculty_name: '', room: '' }
+}
+function emptyExam() {
+  return { exam_date: '', exam_start_time: '', exam_end_time: '', exam_subject: '', exam_room: '' }
+}
+
+// ── Student view: weekly class grid ───────────────────────────
+function ClassGrid({ slots }: { slots: Slot[] }) {
+  const classSlots = slots.filter(s => s.timetable_type === 'class' && s.is_active)
+
+  // Collect all unique slot_labels (time periods) in order
+  const allLabels = Array.from(new Set(classSlots.map(s => s.slot_label ?? ''))).filter(Boolean).sort()
+
+  if (classSlots.length === 0) {
+    return (
+      <div style={{ border: '1.5px solid #1C1208', background: '#FDFAF5', padding: '32px', textAlign: 'center' }}>
+        <div style={{ fontSize: '12px', color: '#8A6A4A' }}>No class timetable set yet. Your faculty will update this soon.</div>
+      </div>
+    )
+  }
+
+  return (
+    <div style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
+      <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: '600px' }}>
+        <thead>
+          <tr>
+            <th style={{ padding: '10px 14px', background: '#1C1208', color: '#F2EDE6', fontSize: '9px', fontWeight: 700, letterSpacing: '1.5px', textAlign: 'left', border: '1px solid #2E1E10' }}>
+              DAY
+            </th>
+            {allLabels.map(label => (
+              <th key={label} style={{ padding: '10px 12px', background: '#1C1208', color: '#C8A878', fontSize: '9px', fontWeight: 700, letterSpacing: '1px', textAlign: 'center', border: '1px solid #2E1E10', whiteSpace: 'nowrap' }}>
+                {label}
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {DAYS.map((day, di) => (
+            <tr key={day} style={{ background: di % 2 === 0 ? '#FDFAF5' : '#F2EDE6' }}>
+              <td style={{ padding: '10px 14px', fontSize: '10px', fontWeight: 700, color: '#1C1208', letterSpacing: '1px', border: '1px solid #E0D0B8' }}>
+                {day}
+              </td>
+              {allLabels.map(label => {
+                const slot = classSlots.find(s => s.day === day && s.slot_label === label)
+                return (
+                  <td key={label} style={{ padding: '8px 12px', border: '1px solid #E0D0B8', textAlign: 'center', minWidth: '100px' }}>
+                    {slot ? (
+                      <>
+                        <div style={{ fontSize: '11px', fontWeight: 700, color: '#1C1208' }}>{slot.subject_code || slot.subject_name}</div>
+                        {slot.subject_code && slot.subject_name && (
+                          <div style={{ fontSize: '9px', color: '#8A6A4A', marginTop: '2px' }}>{slot.subject_name}</div>
+                        )}
+                        {slot.room && <div style={{ fontSize: '9px', color: '#C8A878', marginTop: '2px' }}>{slot.room}</div>}
+                      </>
+                    ) : (
+                      <span style={{ fontSize: '10px', color: '#D4C8B8' }}>—</span>
+                    )}
+                  </td>
+                )
+              })}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  )
+}
+
+// ── Student view: exam list ────────────────────────────────────
+function ExamList({ slots }: { slots: Slot[] }) {
+  const examSlots = slots
+    .filter(s => s.timetable_type === 'exam' && s.is_active && s.exam_date)
+    .sort((a, b) => (a.exam_date ?? '').localeCompare(b.exam_date ?? ''))
+
+  if (examSlots.length === 0) {
+    return (
+      <div style={{ border: '1.5px solid #1C1208', background: '#FDFAF5', padding: '32px', textAlign: 'center' }}>
+        <div style={{ fontSize: '12px', color: '#8A6A4A' }}>No exam timetable set yet. Your faculty will update this soon.</div>
+      </div>
+    )
+  }
+
+  const today = new Date().toISOString().slice(0, 10)
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+      {examSlots.map(s => {
+        const isPast = (s.exam_date ?? '') < today
+        const isToday = s.exam_date === today
+        return (
+          <div key={s.id} style={{
+            display: 'flex', alignItems: 'center', gap: '16px', flexWrap: 'wrap',
+            padding: '14px 18px', border: `1.5px solid ${isToday ? '#D94F00' : '#1C1208'}`,
+            background: isToday ? '#FFF8F2' : isPast ? '#F5F0EA' : '#FDFAF5',
+            opacity: isPast ? 0.6 : 1,
+          }}>
+            {/* Date block */}
+            <div style={{ textAlign: 'center', minWidth: '52px', flexShrink: 0 }}>
+              <div style={{ fontSize: '20px', fontWeight: 700, color: isToday ? '#D94F00' : '#1C1208', lineHeight: 1 }}>
+                {new Date(s.exam_date + 'T00:00:00').getDate().toString().padStart(2,'0')}
+              </div>
+              <div style={{ fontSize: '9px', color: '#8A6A4A', letterSpacing: '1px', marginTop: '2px' }}>
+                {new Date(s.exam_date + 'T00:00:00').toLocaleDateString('en-IN', { month: 'short' }).toUpperCase()}
+              </div>
+            </div>
+            {/* Divider */}
+            <div style={{ width: '2px', height: '40px', background: isToday ? '#D94F00' : '#E0D0B8', flexShrink: 0 }} />
+            {/* Details */}
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontSize: '13px', fontWeight: 700, color: '#1C1208' }}>{s.exam_subject}</div>
+              <div style={{ fontSize: '10px', color: '#8A6A4A', marginTop: '3px' }}>
+                {s.exam_start_time && s.exam_end_time ? `${s.exam_start_time} – ${s.exam_end_time}` : ''}
+                {s.exam_room ? ` · ${s.exam_room}` : ''}
+              </div>
+            </div>
+            {isToday && (
+              <span style={{ fontSize: '8px', fontWeight: 700, background: '#D94F00', color: '#F2EDE6', padding: '3px 8px', letterSpacing: '1px', flexShrink: 0 }}>TODAY</span>
+            )}
+            {isPast && !isToday && (
+              <span style={{ fontSize: '8px', color: '#8A6A4A', letterSpacing: '1px', flexShrink: 0 }}>DONE</span>
+            )}
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
+// ── Main page ──────────────────────────────────────────────────
 export default function TimetablePage() {
+  const supabase = createClient()
+  const [me, setMe] = useState<UserInfo | null>(null)
   const [slots, setSlots] = useState<Slot[]>([])
-  const [subjects, setSubjects] = useState<Subject[]>([])
   const [loading, setLoading] = useState(true)
-  const [showForm, setShowForm] = useState(false)
-  const [error, setError] = useState('')
-  const [saving, setSaving] = useState(false)
+  const [activeTab, setActiveTab] = useState<'class' | 'exam'>('class')
 
-  const [form, setForm] = useState({
-    day_of_week: '0',
-    start_time: '09:00',
-    end_time: '10:00',
-    slot_type: 'class',
-    subject_id: '',
-    room: '',
-  })
+  // Faculty: target selector
+  const [targetYear, setTargetYear] = useState('')
+  const [targetSection, setTargetSection] = useState('')
+  const [targetDept, setTargetDept] = useState('')
 
-  // ── Import from PDF ──────────────────────────────────────
+  // Forms
+  const [showClassForm, setShowClassForm] = useState(false)
+  const [showExamForm, setShowExamForm] = useState(false)
   const [showImport, setShowImport] = useState(false)
+  const [classForm, setClassForm] = useState(emptyClass())
+  const [examForm, setExamForm] = useState(emptyExam())
   const [importFile, setImportFile] = useState<File | null>(null)
+  const [parsedSlots, setParsedSlots] = useState<ParsedSlot[]>([])
   const [importing, setImporting] = useState(false)
   const [importError, setImportError] = useState('')
-  const [parsedSlots, setParsedSlots] = useState<ParsedSlot[]>([])
   const [savingImport, setSavingImport] = useState(false)
+  const importFileRef = useRef<HTMLInputElement | null>(null)
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState('')
+  const [success, setSuccess] = useState('')
 
-  const supabase = createClient()
-
-  const fetchAll = useCallback(async () => {
-    const [slotsRes, subjectsRes] = await Promise.all([
-      supabase.from('timetable').select('*').order('start_time'),
-      supabase.from('subjects').select('id, code, name').order('code'),
-    ])
-    if (slotsRes.data) setSlots(slotsRes.data)
-    if (subjectsRes.data) setSubjects(subjectsRes.data)
-    setLoading(false)
-  }, [supabase])
-
-  useEffect(() => { fetchAll() }, [fetchAll])
-
-  function update(field: string, value: string) {
-    setForm(prev => ({ ...prev, [field]: value }))
-    setError('')
-  }
-
-  async function handleSave() {
-    if (form.start_time >= form.end_time) {
-      setError('End time must be after start time')
-      return
-    }
-    if (form.slot_type === 'class' && !form.subject_id) {
-      setError('Pick a subject for class slots')
-      return
-    }
-
-    setSaving(true)
+  const load = useCallback(async () => {
+    setLoading(true)
     const { data: { user } } = await supabase.auth.getUser()
-    if (!user) { setError('Not signed in'); setSaving(false); return }
+    if (!user) return
 
-    const { error: dbError } = await supabase.from('timetable').insert({
-      student_id: user.id,
-      day_of_week: parseInt(form.day_of_week),
-      start_time: form.start_time,
-      end_time: form.end_time,
-      slot_type: form.slot_type,
-      subject_id: form.subject_id || null,
-      room: form.room.trim() || null,
-    })
+    const { data: profile } = await supabase
+      .from('users')
+      .select('id, role, department, year, section')
+      .eq('id', user.id)
+      .single()
 
-    if (dbError) {
-      setError(dbError.message)
-      setSaving(false)
-      return
+    setMe(profile as UserInfo)
+
+    const isStaff = ['faculty', 'hod', 'admin'].includes(profile?.role ?? '')
+
+    // For faculty: set default target
+    if (isStaff && profile?.department && !targetDept) {
+      setTargetDept(profile.department ?? '')
     }
 
-    setSaving(false)
-    setShowForm(false)
-    fetchAll()
-  }
+    // Build query
+    let query = supabase.from('timetable_slots').select('*').eq('is_active', true)
 
-  async function handleDelete(id: string) {
-    await supabase.from('timetable').delete().eq('id', id)
-    fetchAll()
-  }
+    if (isStaff) {
+      const dept = targetDept || profile?.department || ''
+      if (dept) query = query.eq('department', dept)
+      if (targetYear) query = query.eq('year', parseInt(targetYear))
+      if (targetSection) query = query.eq('section', targetSection)
+    } else {
+      // Student: load own timetable
+      if (profile?.department) query = query.eq('department', profile.department)
+      if (profile?.year) query = query.eq('year', profile.year)
+      if (profile?.section) query = query.eq('section', profile.section)
+    }
 
-  function subjectCode(id: string | null): string {
-    if (!id) return ''
-    return subjects.find(s => s.id === id)?.code ?? ''
-  }
+    const { data } = await query
+    setSlots((data as Slot[]) ?? [])
+    setLoading(false)
+  }, [supabase, targetDept, targetYear, targetSection])
 
-  function hhmm(t: string): string {
-    return t.slice(0, 5)
-  }
+  useEffect(() => { load() }, [load])
 
-  function slotHours(s: Slot): number {
-    const [sh, sm] = s.start_time.split(':').map(Number)
-    const [eh, em] = s.end_time.split(':').map(Number)
-    return (eh * 60 + em - sh * 60 - sm) / 60
-  }
+  const isStaff = me && ['faculty', 'hod', 'admin'].includes(me.role)
 
-  // ── Import handlers ──────────────────────────────────────
   async function handleParse() {
     if (!importFile) { setImportError('Choose a PDF file first'); return }
-    setImporting(true)
-    setImportError('')
-    setParsedSlots([])
-
+    if (!targetYear) { setImportError('Set the year before parsing'); return }
+    if (!targetSection.trim()) { setImportError('Set the section before parsing'); return }
+    setImporting(true); setImportError(''); setParsedSlots([])
     const formData = new FormData()
     formData.append('file', importFile)
-
     try {
       const res = await fetch(`${process.env.NEXT_PUBLIC_AI_SERVICE_URL}/parse-timetable`, {
-        method: 'POST',
-        body: formData,
+        method: 'POST', body: formData,
       })
       const data = await res.json()
-
-      if (!res.ok) {
-        setImportError(data.detail ?? 'Could not parse PDF')
-        setImporting(false)
-        return
-      }
-
-      const result: ParsedSlot[] = (data.slots ?? []).map((s: {
-        day_of_week: number | null
-        start_time: string | null
-        end_time: string | null
-        subject_code: string | null
-        subject_name: string | null
-        slot_type?: 'class' | 'lab' | 'free' | 'break'
-        room: string | null
-      }) => ({
-        day_of_week: s.day_of_week ?? 0,
-        start_time: s.start_time || '09:00',
-        end_time: s.end_time || '10:00',
-        subject_code: s.subject_code,
-        subject_name: s.subject_name,
-        slot_type: s.slot_type ?? 'class',
-        room: s.room,
-        include: true,
-      }))
+      if (!res.ok) { setImportError(data.detail ?? 'Could not parse PDF'); setImporting(false); return }
+      const result: ParsedSlot[] = (data.slots ?? []).map((s: Omit<ParsedSlot, 'include'>) => ({ ...s, slot_type: s.slot_type ?? 'class', include: true }))
       setParsedSlots(result)
-    } catch {
-      setImportError('Could not reach the AI service. Is it running?')
-    }
-
+    } catch { setImportError('Could not reach AI service. Is it running?') }
     setImporting(false)
   }
 
-  function updateParsedSlot(index: number, field: keyof ParsedSlot, value: string | boolean) {
-    setParsedSlots(prev => prev.map((s, i) => i === index ? { ...s, [field]: value } : s))
+  function updateParsed(i: number, field: keyof ParsedSlot, value: string | boolean) {
+    setParsedSlots(prev => prev.map((s, idx) => idx === i ? { ...s, [field]: value } : s))
   }
 
   async function handleSaveImport() {
-    setSavingImport(true)
-    setImportError('')
-
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) { setImportError('Not signed in'); setSavingImport(false); return }
-
+    if (!me) return
+    setSavingImport(true); setImportError('')
+    const dept = targetDept || me.department || ''
     const included = parsedSlots.filter(s => s.include)
+    const dayMap = ['MON','TUE','WED','THU','FRI','SAT']
 
     for (const slot of included) {
-      if (!slot.start_time || !slot.end_time) {
-        setImportError(`Row "${slot.subject_code ?? slot.slot_type}" is missing a start/end time — fix it in the preview before saving.`)
-        setSavingImport(false)
-        return
-      }
-    }
-
-    for (const slot of included) {
-      let subjectId: string | null = null
-
-      if (slot.slot_type !== 'free' && slot.slot_type !== 'break' && slot.subject_code) {
-        const { data: existing } = await supabase
-          .from('subjects')
-          .select('id')
-          .ilike('code', slot.subject_code)
-          .eq('student_id', user.id)
-          .maybeSingle()
-
-        if (existing) {
-          subjectId = existing.id
-        } else {
-          const { data: newSubject, error: subError } = await supabase
-            .from('subjects')
-            .insert({
-              student_id: user.id,
-              code: slot.subject_code,
-              name: slot.subject_name ?? slot.subject_code,
-              difficulty: 3,
-              coverage_pct: 0,
-            })
-            .select('id')
-            .single()
-
-          if (subError) {
-            setImportError(`Could not create subject ${slot.subject_code}: ${subError.message}`)
-            setSavingImport(false)
-            return
-          }
-          subjectId = newSubject.id
-        }
-      }
-
-      const { error: insertError } = await supabase.from('timetable').insert({
-        student_id: user.id,
-        day_of_week: slot.day_of_week,
-        start_time: slot.start_time,
-        end_time: slot.end_time,
-        slot_type: slot.slot_type,
-        subject_id: subjectId,
-        room: slot.room,
+      const { error: e } = await supabase.from('timetable_slots').insert({
+        timetable_type: 'class',
+        department: dept,
+        year: parseInt(targetYear),
+        section: targetSection,
+        day: dayMap[slot.day_of_week] ?? 'MON',
+        slot_label: `${slot.start_time}–${slot.end_time}`,
+        subject_code: slot.subject_code || null,
+        subject_name: slot.subject_name || slot.subject_code || null,
+        room: slot.room || null,
+        created_by: me.id,
       })
-
-      if (insertError) {
-        setImportError(`Could not save slot: ${insertError.message}`)
-        setSavingImport(false)
-        return
-      }
+      if (e) { setImportError('Save failed: ' + e.message); setSavingImport(false); return }
     }
-
-    setSavingImport(false)
-    setShowImport(false)
-    setImportFile(null)
+    setSuccess(`${included.length} slots imported.`)
     setParsedSlots([])
-    fetchAll()
+    setImportFile(null)
+    setShowImport(false)
+    setSavingImport(false)
+    load()
   }
 
-  // Free hours today (JS getDay: 0=Sun..6=Sat -> our 0=Mon..5=Sat)
-  const jsDay = new Date().getDay()
-  const todayIdx = jsDay === 0 ? -1 : jsDay - 1
-  const freeToday = slots
-    .filter(s => s.day_of_week === todayIdx && s.slot_type === 'free')
-    .reduce((sum, s) => sum + slotHours(s), 0)
+  async function saveClass() {
+    if (!classForm.slot_label.trim()) { setError('Time slot is required'); return }
+    if (!classForm.subject_name.trim()) { setError('Subject is required'); return }
+    if (!targetYear) { setError('Year is required'); return }
+    if (!targetSection.trim()) { setError('Section is required'); return }
 
-  const inputStyle: React.CSSProperties = {
-    width: '100%', border: '1.5px solid #C8A878',
-    background: '#F2EDE6', padding: '9px 11px',
-    fontSize: '12px', color: '#1C1208',
-    outline: 'none', borderRadius: 0, fontFamily: 'inherit',
-    display: 'block',
+    setSaving(true); setError(''); setSuccess('')
+    const dept = targetDept || me?.department || ''
+
+    const { error: e } = await supabase.from('timetable_slots').insert({
+      timetable_type: 'class',
+      department: dept,
+      year: parseInt(targetYear),
+      section: targetSection,
+      day: classForm.day,
+      slot_label: classForm.slot_label,
+      subject_code: classForm.subject_code || null,
+      subject_name: classForm.subject_name,
+      faculty_name: classForm.faculty_name || null,
+      room: classForm.room || null,
+      created_by: me?.id,
+    })
+
+    if (e) setError(e.message)
+    else {
+      setSuccess('Class slot added.')
+      setClassForm(emptyClass())
+      setShowClassForm(false)
+      load()
+    }
+    setSaving(false)
   }
 
-  const labelStyle: React.CSSProperties = {
-    fontSize: '9px', fontWeight: 700,
-    letterSpacing: '1.5px', color: '#6A4A2A',
-    marginBottom: '5px', display: 'block',
+  async function saveExam() {
+    if (!examForm.exam_date) { setError('Exam date is required'); return }
+    if (!examForm.exam_subject.trim()) { setError('Subject is required'); return }
+    if (!targetYear) { setError('Year is required'); return }
+    if (!targetSection.trim()) { setError('Section is required'); return }
+
+    setSaving(true); setError(''); setSuccess('')
+    const dept = targetDept || me?.department || ''
+
+    const { error: e } = await supabase.from('timetable_slots').insert({
+      timetable_type: 'exam',
+      department: dept,
+      year: parseInt(targetYear),
+      section: targetSection,
+      exam_date: examForm.exam_date,
+      exam_start_time: examForm.exam_start_time || null,
+      exam_end_time: examForm.exam_end_time || null,
+      exam_subject: examForm.exam_subject,
+      exam_room: examForm.exam_room || null,
+      created_by: me?.id,
+    })
+
+    if (e) setError(e.message)
+    else {
+      setSuccess('Exam added.')
+      setExamForm(emptyExam())
+      setShowExamForm(false)
+      load()
+    }
+    setSaving(false)
   }
 
-  const today = new Date().toLocaleDateString('en-IN', {
-    weekday: 'short', day: '2-digit', month: 'short', year: 'numeric',
-  }).toUpperCase()
+  async function deleteSlot(id: string) {
+    if (!confirm('Remove this slot?')) return
+    await supabase.from('timetable_slots').update({ is_active: false }).eq('id', id)
+    setSlots(prev => prev.filter(s => s.id !== id))
+  }
+
+  const today = new Date().toLocaleDateString('en-IN', { weekday: 'short', day: '2-digit', month: 'short', year: 'numeric' }).toUpperCase()
 
   return (
     <>
       <header style={{
-        height: '48px', borderBottom: '2px solid #1C1208',
+        minHeight: '48px', borderBottom: '2px solid #1C1208',
         display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-        padding: '0 24px', background: '#F2EDE6', flexShrink: 0,
+        padding: '0 clamp(12px,4vw,24px)', background: '#F2EDE6',
+        flexShrink: 0, flexWrap: 'wrap', gap: '4px',
       }}>
         <div style={{ display: 'flex', alignItems: 'baseline', gap: '12px' }}>
-          <span style={{ fontSize: '13px', fontWeight: 700, color: '#1C1208', letterSpacing: '0.5px' }}>
-            TIMETABLE
-          </span>
+          <span style={{ fontSize: '13px', fontWeight: 700, color: '#1C1208' }}>TIMETABLE</span>
           <span style={{ fontSize: '11px', color: '#C8A878' }}>/</span>
           <span style={{ fontSize: '11px', color: '#8A6A4A' }}>
-            {freeToday > 0 ? `${freeToday}h free today` : `${slots.length} slots this week`}
+            {isStaff ? `${targetDept || me?.department || ''} ${targetYear ? `Y${targetYear}` : ''} ${targetSection ? `SEC ${targetSection}` : ''}`.trim()
+              : `${me?.department ?? ''} · Y${me?.year ?? ''} · SEC ${me?.section ?? ''}`}
           </span>
         </div>
-        <span style={{ fontSize: '10px', color: '#6A4A2A', background: '#E8DDD0', padding: '4px 10px', letterSpacing: '0.5px' }}>
-          {today}
-        </span>
+        <span style={{ fontSize: '10px', color: '#6A4A2A', background: '#E8DDD0', padding: '4px 10px' }}>{today}</span>
       </header>
 
-      <main style={{ flex: 1, padding: '20px 24px', display: 'flex', flexDirection: 'column', gap: '16px', overflowY: 'auto' }}>
+      <main style={{ flex: 1, overflowY: 'auto', padding: 'clamp(12px,4vw,20px) clamp(12px,4vw,24px)', display: 'flex', flexDirection: 'column', gap: '16px' }}>
 
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <div>
-            <h1 style={{ fontSize: '18px', fontWeight: 700, color: '#1C1208', margin: 0 }}>Weekly schedule</h1>
-            <p style={{ fontSize: '11px', color: '#8A6A4A', margin: '3px 0 0' }}>
-              Mark free slots too — the AI planner uses them to suggest study sessions.
-            </p>
+        {success && <div style={{ fontSize: '11px', color: '#3D7A50', borderLeft: '2px solid #3D7A50', paddingLeft: '10px' }}>{success}</div>}
+        {error && <div style={{ fontSize: '11px', color: '#D94F00', borderLeft: '2px solid #D94F00', paddingLeft: '10px' }}>{error}</div>}
+
+        {/* Faculty: target selector */}
+        {isStaff && (
+          <div style={{ border: '1.5px solid #1C1208', background: '#FDFAF5', padding: '14px 18px' }}>
+            <div style={{ fontSize: '9px', fontWeight: 700, letterSpacing: '2px', color: '#8A6A4A', marginBottom: '10px' }}>VIEWING / EDITING FOR</div>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: '10px' }}>
+              {me?.role === 'admin' && (
+                <div>
+                  <label style={lbl}>DEPARTMENT</label>
+                  <select value={targetDept} onChange={e => setTargetDept(e.target.value)} style={{ ...inp, cursor: 'pointer' }}>
+                    <option value="">All</option>
+                    {DEPARTMENTS.map(d => <option key={d} value={d}>{d}</option>)}
+                  </select>
+                </div>
+              )}
+              <div>
+                <label style={lbl}>YEAR</label>
+                <select value={targetYear} onChange={e => setTargetYear(e.target.value)} style={{ ...inp, cursor: 'pointer' }}>
+                  <option value="">All years</option>
+                  {['1','2','3','4'].map(y => <option key={y} value={y}>{y}{['st','nd','rd','th'][+y-1]} Year</option>)}
+                </select>
+              </div>
+              <div>
+                <label style={lbl}>SECTION</label>
+                <input type="text" value={targetSection} onChange={e => setTargetSection(e.target.value.toUpperCase())} placeholder="A, B, C..." style={inp} />
+              </div>
+            </div>
           </div>
-          <div style={{ display: 'flex', gap: '8px' }}>
-            <button
-              type="button"
-              onClick={() => { setShowImport(!showImport); setShowForm(false); setError(''); setImportError('') }}
-              style={{
-                background: 'transparent', color: '#1C1208', border: '1.5px solid #1C1208',
-                padding: '10px 22px', fontSize: '10px', fontWeight: 700,
-                letterSpacing: '2px', cursor: 'pointer', fontFamily: 'inherit',
-              }}
-            >
-              {showImport ? '✕ CLOSE' : '↑ IMPORT FROM PDF'}
+        )}
+
+        {/* Tab bar: Class / Exam */}
+        <div style={{ display: 'flex', border: '1.5px solid #1C1208' }}>
+          {(['class', 'exam'] as const).map((t, i) => (
+            <button key={t} type="button" onClick={() => setActiveTab(t)} style={{
+              flex: 1, padding: '10px', fontSize: '9px', fontWeight: 700, letterSpacing: '1.5px',
+              cursor: 'pointer', fontFamily: 'inherit', border: 'none',
+              borderRight: i === 0 ? '1.5px solid #1C1208' : 'none',
+              background: activeTab === t ? '#1C1208' : '#F2EDE6',
+              color: activeTab === t ? '#F2EDE6' : '#8A6A4A',
+            }}>
+              {t === 'class' ? 'CLASS TIMETABLE' : 'EXAM TIMETABLE'}
             </button>
-            <button
-              type="button"
-              onClick={() => { setShowForm(!showForm); setShowImport(false); setError(''); setImportError('') }}
-              style={{
-                background: '#1C1208', color: '#F2EDE6', border: 'none',
-                padding: '10px 22px', fontSize: '10px', fontWeight: 700,
-                letterSpacing: '2px', cursor: 'pointer', fontFamily: 'inherit',
-              }}
-            >
-              {showForm ? '✕ CLOSE' : '+ ADD SLOT'}
-            </button>
-          </div>
+          ))}
         </div>
 
-        {/* Import panel */}
-        {showImport && (
-          <div style={{ border: '1.5px solid #1C1208', background: '#FDFAF5', padding: '18px' }}>
-            <div style={{ fontSize: '9px', fontWeight: 700, letterSpacing: '1.5px', color: '#8A6A4A', marginBottom: '12px' }}>
-              UPLOAD YOUR CLASS TIMETABLE (PDF)
-            </div>
-
-            <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
-              <input
-                type="file"
-                accept="application/pdf"
-                onChange={e => { setImportFile(e.target.files?.[0] ?? null); setImportError('') }}
-                style={{ ...inputStyle, flex: 1, padding: '8px 11px' }}
-              />
-              <button
-                type="button"
-                onClick={handleParse}
-                disabled={importing}
-                style={{
-                  background: importing ? '#8A6A4A' : '#1C1208', color: '#F2EDE6',
-                  border: 'none', padding: '11px 22px', fontSize: '10px', fontWeight: 700,
-                  letterSpacing: '2px', cursor: importing ? 'not-allowed' : 'pointer',
-                  fontFamily: 'inherit', flexShrink: 0,
-                }}
-              >
-                {importing ? 'PARSING...' : 'PARSE WITH AI'}
-              </button>
-            </div>
-
-            {importError && (
-              <div style={{ fontSize: '11px', color: '#D94F00', borderLeft: '2px solid #D94F00', paddingLeft: '10px', marginTop: '12px' }}>
-                {importError}
-              </div>
-            )}
-
-            {/* Preview */}
-            {parsedSlots.length > 0 && (
-              <div style={{ marginTop: '16px' }}>
-                <div style={{ fontSize: '9px', fontWeight: 700, letterSpacing: '1.5px', color: '#8A6A4A', marginBottom: '10px' }}>
-                  REVIEW {parsedSlots.length} SLOTS — EDIT IF NEEDED, UNCHECK TO SKIP
-                </div>
-
-                <div style={{ border: '1.5px solid #1C1208', maxHeight: '360px', overflowY: 'auto' }}>
-                  {parsedSlots.map((s, i) => (
-                    <div key={i} style={{
-                      display: 'grid',
-                      gridTemplateColumns: '24px 70px 80px 80px 90px 1fr 70px 70px',
-                      gap: '6px', alignItems: 'center',
-                      padding: '8px 10px',
-                      background: '#FDFAF5',
-                      borderBottom: i < parsedSlots.length - 1 ? '1px solid #E0D0B8' : 'none',
-                    }}>
-                      <input
-                        type="checkbox"
-                        checked={s.include}
-                        onChange={e => updateParsedSlot(i, 'include', e.target.checked)}
-                      />
-                      <select
-                        value={s.day_of_week}
-                        onChange={e => updateParsedSlot(i, 'day_of_week', e.target.value)}
-                        style={{ ...inputStyle, padding: '5px 6px', fontSize: '10px' }}
-                      >
-                        {DAYS.map((d, idx) => <option key={d} value={idx}>{d}</option>)}
-                      </select>
-                      <input
-                        type="time"
-                        value={s.start_time}
-                        onChange={e => updateParsedSlot(i, 'start_time', e.target.value)}
-                        style={{ ...inputStyle, padding: '5px 6px', fontSize: '10px' }}
-                      />
-                      <input
-                        type="time"
-                        value={s.end_time}
-                        onChange={e => updateParsedSlot(i, 'end_time', e.target.value)}
-                        style={{ ...inputStyle, padding: '5px 6px', fontSize: '10px' }}
-                      />
-                      <select
-                        value={s.slot_type}
-                        onChange={e => updateParsedSlot(i, 'slot_type', e.target.value)}
-                        style={{ ...inputStyle, padding: '5px 6px', fontSize: '10px' }}
-                      >
-                        <option value="class">Class</option>
-                        <option value="lab">Lab</option>
-                        <option value="free">Free</option>
-                        <option value="break">Break</option>
-                      </select>
-                      <input
-                        type="text"
-                        value={s.subject_code ?? ''}
-                        onChange={e => updateParsedSlot(i, 'subject_code', e.target.value)}
-                        placeholder="Subject code"
-                        style={{ ...inputStyle, padding: '5px 6px', fontSize: '10px' }}
-                      />
-                      <input
-                        type="text"
-                        value={s.room ?? ''}
-                        onChange={e => updateParsedSlot(i, 'room', e.target.value)}
-                        placeholder="Room"
-                        style={{ ...inputStyle, padding: '5px 6px', fontSize: '10px' }}
-                      />
-                      <span style={{ fontSize: '9px', color: '#8A6A4A' }}>
-                        {s.subject_name ?? ''}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-
-                <button
-                  type="button"
-                  onClick={handleSaveImport}
-                  disabled={savingImport}
-                  style={{
-                    marginTop: '12px', width: '100%',
-                    background: savingImport ? '#8A6A4A' : '#1C1208', color: '#F2EDE6',
-                    border: 'none', padding: '11px', fontSize: '10px', fontWeight: 700,
-                    letterSpacing: '2px', cursor: savingImport ? 'not-allowed' : 'pointer',
-                    fontFamily: 'inherit',
-                  }}
-                >
-                  {savingImport
-                    ? 'SAVING...'
-                    : `SAVE ${parsedSlots.filter(s => s.include).length} SLOTS →`}
+        {/* ── CLASS TIMETABLE ── */}
+        {activeTab === 'class' && (
+          <>
+            {isStaff && (
+              <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end', flexWrap: 'wrap' }}>
+                <button type="button" onClick={() => { setShowImport(s => !s); setShowClassForm(false); setError(''); setImportError('') }} style={{
+                  background: 'transparent', color: '#1C1208', border: '1.5px solid #1C1208',
+                  padding: '9px 18px', fontSize: '9px', fontWeight: 700,
+                  letterSpacing: '1.5px', cursor: 'pointer', fontFamily: 'inherit',
+                }}>
+                  {showImport ? '✕ CLOSE' : '↑ IMPORT PDF'}
+                </button>
+                <button type="button" onClick={() => { setShowClassForm(s => !s); setShowImport(false); setError('') }} style={{
+                  background: '#1C1208', color: '#F2EDE6', border: 'none',
+                  padding: '9px 18px', fontSize: '9px', fontWeight: 700,
+                  letterSpacing: '1.5px', cursor: 'pointer', fontFamily: 'inherit',
+                }}>
+                  {showClassForm ? '✕ CANCEL' : '+ ADD CLASS SLOT'}
                 </button>
               </div>
             )}
-          </div>
-        )}
 
-        {showForm && (
-          <div style={{ border: '1.5px solid #1C1208', background: '#FDFAF5', padding: '18px' }}>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6, 1fr)', gap: '12px', alignItems: 'end' }}>
-              <div>
-                <label style={labelStyle}>DAY</label>
-                <select value={form.day_of_week} onChange={e => update('day_of_week', e.target.value)} style={{ ...inputStyle, cursor: 'pointer' }}>
-                  {DAYS.map((d, i) => <option key={d} value={i}>{d}</option>)}
-                </select>
-              </div>
-              <div>
-                <label style={labelStyle}>START</label>
-                <input type="time" value={form.start_time} onChange={e => update('start_time', e.target.value)} style={inputStyle} />
-              </div>
-              <div>
-                <label style={labelStyle}>END</label>
-                <input type="time" value={form.end_time} onChange={e => update('end_time', e.target.value)} style={inputStyle} />
-              </div>
-              <div>
-                <label style={labelStyle}>TYPE</label>
-                <select value={form.slot_type} onChange={e => update('slot_type', e.target.value)} style={{ ...inputStyle, cursor: 'pointer' }}>
-                  <option value="class">Class</option>
-                  <option value="lab">Lab</option>
-                  <option value="free">Free</option>
-                  <option value="break">Break</option>
-                </select>
-              </div>
-              <div>
-                <label style={labelStyle}>SUBJECT</label>
-                <select value={form.subject_id} onChange={e => update('subject_id', e.target.value)} style={{ ...inputStyle, cursor: 'pointer' }}>
-                  <option value="">—</option>
-                  {subjects.map(s => <option key={s.id} value={s.id}>{s.code}</option>)}
-                </select>
-              </div>
-              <div>
-                <label style={labelStyle}>ROOM</label>
-                <input type="text" value={form.room} onChange={e => update('room', e.target.value)} placeholder="LH-2" style={inputStyle} />
-              </div>
-            </div>
+            {/* PDF import panel */}
+            {isStaff && showImport && (
+              <div style={{ border: '1.5px solid #1C1208', background: '#FDFAF5' }}>
+                <div style={{ padding: '10px 18px', borderBottom: '1.5px solid #1C1208', fontSize: '9px', fontWeight: 700, letterSpacing: '2px', color: '#8A6A4A' }}>
+                  IMPORT CLASS TIMETABLE FROM PDF
+                </div>
+                <div style={{ padding: '18px', display: 'flex', flexDirection: 'column', gap: '14px' }}>
+                  <div style={{ fontSize: '11px', color: '#6A4A2A', lineHeight: 1.6 }}>
+                    Upload a class timetable PDF. The AI service will parse it and extract all slots for you to review before saving.
+                    Make sure Year and Section are set above before parsing.
+                  </div>
+                  <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
+                    <div
+                      onClick={() => importFileRef.current?.click()}
+                      style={{
+                        flex: 1, minWidth: '200px', border: '1.5px dashed #C8A878',
+                        padding: '12px 16px', cursor: 'pointer', background: '#F2EDE6',
+                        fontSize: '11px', color: importFile ? '#3D7A50' : '#8A6A4A', fontWeight: importFile ? 700 : 400,
+                      }}
+                    >
+                      {importFile ? `✓ ${importFile.name}` : 'Click to choose PDF file'}
+                    </div>
+                    <input ref={importFileRef} type="file" accept="application/pdf" style={{ display: 'none' }}
+                      onChange={e => { setImportFile(e.target.files?.[0] ?? null); setImportError(''); setParsedSlots([]) }} />
+                    <button type="button" onClick={handleParse} disabled={importing} style={{
+                      background: importing ? '#8A6A4A' : '#D94F00', color: '#F2EDE6', border: 'none',
+                      padding: '12px 22px', fontSize: '10px', fontWeight: 700, letterSpacing: '1.5px',
+                      cursor: importing ? 'not-allowed' : 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap',
+                    }}>
+                      {importing ? 'PARSING...' : 'PARSE WITH AI →'}
+                    </button>
+                  </div>
 
-            {error && (
-              <div style={{ fontSize: '11px', color: '#D94F00', borderLeft: '2px solid #D94F00', paddingLeft: '10px', marginTop: '12px' }}>
-                {error}
+                  {importError && <div style={{ fontSize: '11px', color: '#D94F00', borderLeft: '2px solid #D94F00', paddingLeft: '10px' }}>{importError}</div>}
+
+                  {parsedSlots.length > 0 && (
+                    <div>
+                      <div style={{ fontSize: '9px', fontWeight: 700, letterSpacing: '1.5px', color: '#8A6A4A', marginBottom: '10px' }}>
+                        REVIEW {parsedSlots.length} PARSED SLOTS — EDIT IF NEEDED, UNCHECK TO SKIP
+                      </div>
+                      <div style={{ border: '1.5px solid #1C1208', maxHeight: '320px', overflowY: 'auto', overflowX: 'auto' }}>
+                        {parsedSlots.map((s, i) => (
+                          <div key={i} style={{
+                            display: 'grid', gridTemplateColumns: '24px 60px 75px 75px 80px 1fr 70px',
+                            gap: '6px', alignItems: 'center', padding: '7px 10px',
+                            background: i % 2 === 0 ? '#FDFAF5' : '#F2EDE6',
+                            borderBottom: i < parsedSlots.length - 1 ? '1px solid #E0D0B8' : 'none',
+                            minWidth: '540px',
+                          }}>
+                            <input type="checkbox" checked={s.include} onChange={e => updateParsed(i, 'include', e.target.checked)} style={{ accentColor: '#D94F00' }} />
+                            <select value={s.day_of_week} onChange={e => updateParsed(i, 'day_of_week', e.target.value)} style={{ ...inp, padding: '4px 5px', fontSize: '10px' }}>
+                              {DAYS.map((d, idx) => <option key={d} value={idx}>{d}</option>)}
+                            </select>
+                            <input type="time" value={s.start_time} onChange={e => updateParsed(i, 'start_time', e.target.value)} style={{ ...inp, padding: '4px 5px', fontSize: '10px' }} />
+                            <input type="time" value={s.end_time} onChange={e => updateParsed(i, 'end_time', e.target.value)} style={{ ...inp, padding: '4px 5px', fontSize: '10px' }} />
+                            <select value={s.slot_type} onChange={e => updateParsed(i, 'slot_type', e.target.value)} style={{ ...inp, padding: '4px 5px', fontSize: '10px' }}>
+                              <option value="class">Class</option>
+                              <option value="lab">Lab</option>
+                              <option value="free">Free</option>
+                              <option value="break">Break</option>
+                            </select>
+                            <div style={{ fontSize: '11px', color: '#1C1208', fontWeight: 600 }}>
+                              {s.subject_code ? `${s.subject_code} — ` : ''}{s.subject_name ?? ''}
+                            </div>
+                            <div style={{ fontSize: '10px', color: '#8A6A4A' }}>{s.room ?? ''}</div>
+                          </div>
+                        ))}
+                      </div>
+                      <button type="button" onClick={handleSaveImport} disabled={savingImport} style={{
+                        marginTop: '12px', width: '100%',
+                        background: savingImport ? '#8A6A4A' : '#1C1208', color: '#F2EDE6',
+                        border: 'none', padding: '12px', fontSize: '10px', fontWeight: 700,
+                        letterSpacing: '2px', cursor: savingImport ? 'not-allowed' : 'pointer', fontFamily: 'inherit',
+                      }}>
+                        {savingImport ? 'SAVING...' : `SAVE ${parsedSlots.filter(s => s.include).length} SLOTS →`}
+                      </button>
+                    </div>
+                  )}
+                </div>
               </div>
             )}
 
-            <button
-              type="button"
-              onClick={handleSave}
-              disabled={saving}
-              style={{
-                marginTop: '14px', width: '100%',
-                background: saving ? '#8A6A4A' : '#1C1208', color: '#F2EDE6',
-                border: 'none', padding: '11px', fontSize: '10px', fontWeight: 700,
-                letterSpacing: '2px', cursor: saving ? 'not-allowed' : 'pointer',
-                fontFamily: 'inherit',
-              }}
-            >
-              {saving ? 'SAVING...' : 'ADD SLOT →'}
-            </button>
-          </div>
-        )}
-
-        {/* Weekly grid */}
-        {loading ? (
-          <div style={{ fontSize: '11px', color: '#8A6A4A', letterSpacing: '1px' }}>LOADING...</div>
-        ) : (
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6, 1fr)', border: '1.5px solid #1C1208' }}>
-            {DAYS.map((day, dayIdx) => {
-              const daySlots = slots
-                .filter(s => s.day_of_week === dayIdx)
-                .sort((a, b) => a.start_time.localeCompare(b.start_time))
-              const isToday = dayIdx === todayIdx
-              return (
-                <div key={day} style={{
-                  borderRight: dayIdx < 5 ? '1.5px solid #1C1208' : 'none',
-                  minHeight: '220px',
-                }}>
-                  <div style={{
-                    padding: '8px', textAlign: 'center',
-                    fontSize: '10px', fontWeight: 700, letterSpacing: '1.5px',
-                    background: isToday ? '#D94F00' : '#1C1208',
-                    color: '#F2EDE6',
+            {/* Add class form */}
+            {isStaff && showClassForm && (
+              <div style={{ border: '1.5px solid #1C1208', background: '#FDFAF5' }}>
+                <div style={{ padding: '10px 18px', borderBottom: '1.5px solid #1C1208', fontSize: '9px', fontWeight: 700, letterSpacing: '2px', color: '#8A6A4A' }}>NEW CLASS SLOT</div>
+                <div style={{ padding: '18px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: '10px' }}>
+                    <div>
+                      <label style={lbl}>DAY</label>
+                      <select value={classForm.day} onChange={e => setClassForm(p => ({ ...p, day: e.target.value }))} style={{ ...inp, cursor: 'pointer' }}>
+                        {DAYS.map(d => <option key={d} value={d}>{d}</option>)}
+                      </select>
+                    </div>
+                    <div>
+                      <label style={lbl}>TIME SLOT</label>
+                      <input type="text" value={classForm.slot_label} onChange={e => setClassForm(p => ({ ...p, slot_label: e.target.value }))} placeholder="9:00-9:55" style={inp} />
+                    </div>
+                    <div>
+                      <label style={lbl}>SUBJECT CODE</label>
+                      <input type="text" value={classForm.subject_code} onChange={e => setClassForm(p => ({ ...p, subject_code: e.target.value }))} placeholder="CS401" style={inp} />
+                    </div>
+                    <div>
+                      <label style={lbl}>SUBJECT NAME</label>
+                      <input type="text" value={classForm.subject_name} onChange={e => setClassForm(p => ({ ...p, subject_name: e.target.value }))} placeholder="DBMS" style={inp} />
+                    </div>
+                    <div>
+                      <label style={lbl}>FACULTY</label>
+                      <input type="text" value={classForm.faculty_name} onChange={e => setClassForm(p => ({ ...p, faculty_name: e.target.value }))} placeholder="Dr. Sharma" style={inp} />
+                    </div>
+                    <div>
+                      <label style={lbl}>ROOM</label>
+                      <input type="text" value={classForm.room} onChange={e => setClassForm(p => ({ ...p, room: e.target.value }))} placeholder="LH-3" style={inp} />
+                    </div>
+                  </div>
+                  <button type="button" onClick={saveClass} disabled={saving} style={{
+                    background: saving ? '#8A6A4A' : '#D94F00', color: '#F2EDE6', border: 'none',
+                    padding: '11px', fontSize: '10px', fontWeight: 700, letterSpacing: '2px',
+                    cursor: saving ? 'not-allowed' : 'pointer', fontFamily: 'inherit',
                   }}>
-                    {day}{isToday ? ' ●' : ''}
-                  </div>
-                  <div style={{ padding: '6px', display: 'flex', flexDirection: 'column', gap: '5px' }}>
-                    {daySlots.length === 0 ? (
-                      <div style={{ fontSize: '9px', color: '#C8A878', textAlign: 'center', padding: '12px 0' }}>—</div>
-                    ) : daySlots.map(s => {
-                      const st = SLOT_STYLE[s.slot_type]
-                      return (
-                        <div key={s.id} style={{
-                          background: st.bg, border: `1px solid ${st.border}`,
-                          padding: '6px 8px', position: 'relative',
-                        }}>
-                          <div style={{ fontSize: '9px', color: st.sub }}>
-                            {hhmm(s.start_time)}–{hhmm(s.end_time)}
-                          </div>
-                          <div style={{ fontSize: '10px', fontWeight: 700, color: st.fg, letterSpacing: '0.3px' }}>
-                            {s.slot_type === 'free' ? 'FREE ✦' :
-                             s.slot_type === 'break' ? 'BREAK' :
-                             `${subjectCode(s.subject_id)}${s.slot_type === 'lab' ? ' LAB' : ''}`}
-                          </div>
-                          {s.room && (
-                            <div style={{ fontSize: '8px', color: st.sub }}>{s.room}</div>
-                          )}
-                          <span
-                            onClick={() => handleDelete(s.id)}
-                            style={{
-                              position: 'absolute', top: '4px', right: '6px',
-                              fontSize: '9px', color: st.sub, cursor: 'pointer',
-                            }}
-                          >
-                            ✕
-                          </span>
-                        </div>
-                      )
-                    })}
-                  </div>
+                    {saving ? 'SAVING...' : 'ADD SLOT →'}
+                  </button>
                 </div>
-              )
-            })}
-          </div>
+              </div>
+            )}
+
+            {/* Class grid */}
+            {loading ? (
+              <div style={{ fontSize: '11px', color: '#8A6A4A' }}>LOADING...</div>
+            ) : (
+              <>
+                <ClassGrid slots={slots} />
+                {/* Faculty: editable slot list */}
+                {isStaff && slots.filter(s => s.timetable_type === 'class' && s.is_active).length > 0 && (
+                  <div style={{ border: '1.5px solid #1C1208', marginTop: '8px' }}>
+                    <div style={{ padding: '10px 16px', borderBottom: '1px solid #E0D0B8', fontSize: '9px', fontWeight: 700, letterSpacing: '2px', color: '#8A6A4A', background: '#F2EDE6' }}>
+                      MANAGE SLOTS
+                    </div>
+                    {slots.filter(s => s.timetable_type === 'class' && s.is_active)
+                      .sort((a, b) => (DAYS.indexOf(a.day ?? '') - DAYS.indexOf(b.day ?? '')) || (a.slot_label ?? '').localeCompare(b.slot_label ?? ''))
+                      .map((s, i, arr) => (
+                        <div key={s.id} style={{
+                          display: 'flex', alignItems: 'center', gap: '12px', padding: '10px 16px',
+                          borderBottom: i < arr.length - 1 ? '1px solid #E0D0B8' : 'none',
+                          background: '#FDFAF5', flexWrap: 'wrap',
+                        }}>
+                          <span style={{ fontSize: '9px', fontWeight: 700, color: '#D94F00', minWidth: '30px' }}>{s.day}</span>
+                          <span style={{ fontSize: '9px', color: '#8A6A4A', minWidth: '70px' }}>{s.slot_label}</span>
+                          <span style={{ fontSize: '12px', fontWeight: 700, color: '#1C1208', flex: 1 }}>{s.subject_code ? `${s.subject_code} — ` : ''}{s.subject_name}</span>
+                          {s.room && <span style={{ fontSize: '10px', color: '#8A6A4A' }}>{s.room}</span>}
+                          <button type="button" onClick={() => deleteSlot(s.id)} style={{
+                            background: 'transparent', border: '1px solid #D94F00', color: '#D94F00',
+                            padding: '3px 8px', fontSize: '8px', fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit',
+                          }}>REMOVE</button>
+                        </div>
+                      ))
+                    }
+                  </div>
+                )}
+              </>
+            )}
+          </>
         )}
 
+        {/* ── EXAM TIMETABLE ── */}
+        {activeTab === 'exam' && (
+          <>
+            {isStaff && (
+              <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+                <button type="button" onClick={() => { setShowExamForm(s => !s); setError('') }} style={{
+                  background: '#1C1208', color: '#F2EDE6', border: 'none',
+                  padding: '9px 18px', fontSize: '9px', fontWeight: 700,
+                  letterSpacing: '1.5px', cursor: 'pointer', fontFamily: 'inherit',
+                }}>
+                  {showExamForm ? '✕ CANCEL' : '+ ADD EXAM'}
+                </button>
+              </div>
+            )}
+
+            {/* Add exam form */}
+            {isStaff && showExamForm && (
+              <div style={{ border: '1.5px solid #1C1208', background: '#FDFAF5' }}>
+                <div style={{ padding: '10px 18px', borderBottom: '1.5px solid #1C1208', fontSize: '9px', fontWeight: 700, letterSpacing: '2px', color: '#8A6A4A' }}>NEW EXAM</div>
+                <div style={{ padding: '18px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: '10px' }}>
+                    <div>
+                      <label style={lbl}>SUBJECT</label>
+                      <input type="text" value={examForm.exam_subject} onChange={e => setExamForm(p => ({ ...p, exam_subject: e.target.value }))} placeholder="DBMS" style={inp} />
+                    </div>
+                    <div>
+                      <label style={lbl}>DATE</label>
+                      <input type="date" value={examForm.exam_date} onChange={e => setExamForm(p => ({ ...p, exam_date: e.target.value }))} style={inp} />
+                    </div>
+                    <div>
+                      <label style={lbl}>START TIME</label>
+                      <input type="time" value={examForm.exam_start_time} onChange={e => setExamForm(p => ({ ...p, exam_start_time: e.target.value }))} style={inp} />
+                    </div>
+                    <div>
+                      <label style={lbl}>END TIME</label>
+                      <input type="time" value={examForm.exam_end_time} onChange={e => setExamForm(p => ({ ...p, exam_end_time: e.target.value }))} style={inp} />
+                    </div>
+                    <div>
+                      <label style={lbl}>ROOM / VENUE</label>
+                      <input type="text" value={examForm.exam_room} onChange={e => setExamForm(p => ({ ...p, exam_room: e.target.value }))} placeholder="Block A" style={inp} />
+                    </div>
+                  </div>
+                  <button type="button" onClick={saveExam} disabled={saving} style={{
+                    background: saving ? '#8A6A4A' : '#D94F00', color: '#F2EDE6', border: 'none',
+                    padding: '11px', fontSize: '10px', fontWeight: 700, letterSpacing: '2px',
+                    cursor: saving ? 'not-allowed' : 'pointer', fontFamily: 'inherit',
+                  }}>
+                    {saving ? 'SAVING...' : 'ADD EXAM →'}
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {loading ? (
+              <div style={{ fontSize: '11px', color: '#8A6A4A' }}>LOADING...</div>
+            ) : (
+              <>
+                <ExamList slots={slots} />
+                {isStaff && slots.filter(s => s.timetable_type === 'exam' && s.is_active).length > 0 && (
+                  <div style={{ border: '1.5px solid #1C1208', marginTop: '8px' }}>
+                    <div style={{ padding: '10px 16px', borderBottom: '1px solid #E0D0B8', fontSize: '9px', fontWeight: 700, letterSpacing: '2px', color: '#8A6A4A', background: '#F2EDE6' }}>MANAGE EXAMS</div>
+                    {slots.filter(s => s.timetable_type === 'exam' && s.is_active)
+                      .sort((a, b) => (a.exam_date ?? '').localeCompare(b.exam_date ?? ''))
+                      .map((s, i, arr) => (
+                        <div key={s.id} style={{
+                          display: 'flex', alignItems: 'center', gap: '12px', padding: '10px 16px',
+                          borderBottom: i < arr.length - 1 ? '1px solid #E0D0B8' : 'none',
+                          background: '#FDFAF5', flexWrap: 'wrap',
+                        }}>
+                          <span style={{ fontSize: '10px', fontWeight: 700, color: '#1C1208', minWidth: '80px' }}>{s.exam_date}</span>
+                          <span style={{ fontSize: '12px', fontWeight: 700, color: '#1C1208', flex: 1 }}>{s.exam_subject}</span>
+                          <span style={{ fontSize: '10px', color: '#8A6A4A' }}>{s.exam_start_time} – {s.exam_end_time}</span>
+                          {s.exam_room && <span style={{ fontSize: '10px', color: '#8A6A4A' }}>{s.exam_room}</span>}
+                          <button type="button" onClick={() => deleteSlot(s.id)} style={{
+                            background: 'transparent', border: '1px solid #D94F00', color: '#D94F00',
+                            padding: '3px 8px', fontSize: '8px', fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit',
+                          }}>REMOVE</button>
+                        </div>
+                      ))
+                    }
+                  </div>
+                )}
+              </>
+            )}
+          </>
+        )}
       </main>
     </>
   )

@@ -1,9 +1,11 @@
 'use client'
 
-import { useState, useRef } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
+import AccountsTab from '@/components/AccountsTab'
 
-type Profile = {
+// ── Types ──────────────────────────────────────────────────────
+type UserProfile = {
   id: string
   full_name: string
   email: string
@@ -19,113 +21,268 @@ type Profile = {
   created_at: string
 }
 
+type ResumeProfile = {
+  headline: string
+  bio: string
+  linkedin_url: string
+  github_url: string
+  portfolio_url: string
+  location: string
+  education: EduItem[]
+  experience: ExpItem[]
+  projects: ProjectItem[]
+  certifications: CertItem[]
+  achievements: AchievItem[]
+  technical_skills: string[]
+}
+
+type EduItem = { institution: string; degree: string; year: string; gpa: string }
+type ExpItem = { company: string; role: string; start: string; end: string; description: string }
+type ProjectItem = { name: string; description: string; tech: string; url: string }
+type CertItem = { name: string; issuer: string; date: string; url: string }
+type AchievItem = { title: string; description: string; date: string }
+
 type Props = {
-  profile: Profile
+  profile: UserProfile
   userId: string
   overviewContent: React.ReactNode
+  isAdmin?: boolean
 }
 
-const BLOOD_GROUPS = ['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-']
+// ── Style constants ────────────────────────────────────────────
+const inp: React.CSSProperties = {
+  width: '100%', border: '1.5px solid #C8A878', background: '#F2EDE6',
+  padding: '9px 12px', fontSize: '13px', color: '#1C1208',
+  outline: 'none', borderRadius: 0, fontFamily: 'inherit', display: 'block',
+}
+const lbl: React.CSSProperties = {
+  fontSize: '9px', fontWeight: 700, letterSpacing: '1.5px',
+  color: '#6A4A2A', marginBottom: '5px', display: 'block',
+}
+const BLOOD_GROUPS = ['A+','A-','B+','B-','AB+','AB-','O+','O-']
 
-const inputStyle: React.CSSProperties = {
-  width: '100%', border: '1.5px solid #C8A878',
-  background: '#F2EDE6', padding: '10px 12px',
-  fontSize: '13px', color: '#1C1208',
-  outline: 'none', borderRadius: 0, fontFamily: 'inherit',
-  display: 'block',
+function emptyResume(): ResumeProfile {
+  return {
+    headline: '', bio: '', linkedin_url: '', github_url: '',
+    portfolio_url: '', location: '',
+    education: [], experience: [], projects: [],
+    certifications: [], achievements: [], technical_skills: [],
+  }
 }
 
-const labelStyle: React.CSSProperties = {
-  fontSize: '9px', fontWeight: 700,
-  letterSpacing: '1.5px', color: '#6A4A2A',
-  marginBottom: '6px', display: 'block',
+// ── Section wrapper ────────────────────────────────────────────
+function Section({ title, children, action }: { title: string; children: React.ReactNode; action?: React.ReactNode }) {
+  const [open, setOpen] = useState(true)
+  return (
+    <div style={{ border: '1.5px solid #1C1208', background: '#FDFAF5' }}>
+      <div
+        onClick={() => setOpen(o => !o)}
+        style={{
+          display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+          padding: '11px 18px', borderBottom: open ? '1.5px solid #1C1208' : 'none',
+          cursor: 'pointer', background: '#F2EDE6',
+        }}
+      >
+        <span style={{ fontSize: '9px', fontWeight: 700, letterSpacing: '2px', color: '#8A6A4A' }}>{title}</span>
+        <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+          {action && <div onClick={e => e.stopPropagation()}>{action}</div>}
+          <span style={{ fontSize: '11px', color: '#8A6A4A' }}>{open ? '▲' : '▼'}</span>
+        </div>
+      </div>
+      {open && <div style={{ padding: '18px' }}>{children}</div>}
+    </div>
+  )
 }
 
-export default function DashboardTabs({ profile, userId, overviewContent }: Props) {
-  const [tab, setTab] = useState<'overview' | 'profile'>('overview')
-  const [form, setForm] = useState({
-    full_name: profile.full_name ?? '',
-    phone_number: profile.phone_number ?? '',
-    blood_group: profile.blood_group ?? '',
-    section: profile.section ?? '',
-    department: profile.department ?? '',
-    roll_number: profile.roll_number ?? '',
-    year: profile.year?.toString() ?? '',
-    skillInput: '',
-    skills: profile.skills ?? [],
-  })
-  const [photoUrl, setPhotoUrl] = useState(profile.profile_photo_url ?? '')
-  const [saving, setSaving] = useState(false)
-  const [uploading, setUploading] = useState(false)
-  const [saveMsg, setSaveMsg] = useState('')
-  const [error, setError] = useState('')
-  const fileRef = useRef<HTMLInputElement>(null)
+function AddBtn({ onClick, label = 'ADD' }: { onClick: () => void; label?: string }) {
+  return (
+    <button type="button" onClick={onClick} style={{
+      background: '#1C1208', color: '#F2EDE6', border: 'none',
+      padding: '4px 12px', fontSize: '8px', fontWeight: 700,
+      letterSpacing: '1.5px', cursor: 'pointer', fontFamily: 'inherit',
+    }}>{label}</button>
+  )
+}
+
+function DeleteBtn({ onClick }: { onClick: () => void }) {
+  return (
+    <button type="button" onClick={onClick} style={{
+      background: 'transparent', border: '1px solid #D94F00', color: '#D94F00',
+      padding: '3px 8px', fontSize: '8px', fontWeight: 700,
+      letterSpacing: '1px', cursor: 'pointer', fontFamily: 'inherit',
+    }}>✕ REMOVE</button>
+  )
+}
+
+function Grid({ cols = 2, children }: { cols?: number; children: React.ReactNode }) {
+  return (
+    <div style={{ display: 'grid', gridTemplateColumns: `repeat(auto-fit, minmax(${cols === 1 ? '100%' : '160px'}, 1fr))`, gap: '12px' }}>
+      {children}
+    </div>
+  )
+}
+
+function Field({ label, value, onChange, type = 'text', placeholder = '' }: {
+  label: string; value: string; onChange: (v: string) => void
+  type?: string; placeholder?: string
+}) {
+  return (
+    <div>
+      <label style={lbl}>{label}</label>
+      <input type={type} value={value} onChange={e => onChange(e.target.value)} placeholder={placeholder} style={inp} />
+    </div>
+  )
+}
+
+function TextArea({ label, value, onChange, rows = 3, placeholder = '' }: {
+  label: string; value: string; onChange: (v: string) => void; rows?: number; placeholder?: string
+}) {
+  return (
+    <div>
+      <label style={lbl}>{label}</label>
+      <textarea value={value} onChange={e => onChange(e.target.value)} rows={rows} placeholder={placeholder} style={{ ...inp, resize: 'vertical' }} />
+    </div>
+  )
+}
+
+// ── Main component ─────────────────────────────────────────────
+export default function DashboardTabs({ profile, userId, overviewContent, isAdmin = false }: Props) {
   const supabase = createClient()
+  const [tab, setTab] = useState<'overview' | 'profile' | 'accounts'>('overview')
 
-  function update(field: string, value: string) {
-    setForm(prev => ({ ...prev, [field]: value }))
-    setSaveMsg('')
-    setError('')
-  }
+  // Personal info state (from public.users)
+  const [personal, setPersonal] = useState({
+    full_name: profile?.full_name ?? '',
+    phone_number: profile?.phone_number ?? '',
+    blood_group: profile?.blood_group ?? '',
+    section: profile?.section ?? '',
+    department: profile?.department ?? '',
+    roll_number: profile?.roll_number ?? '',
+    year: profile?.year?.toString() ?? '',
+    skillInput: '',
+    skills: profile?.skills ?? [] as string[],
+  })
+  const [photoUrl, setPhotoUrl] = useState(profile?.profile_photo_url ?? '')
+  const [photoUploading, setPhotoUploading] = useState(false)
+  const fileRef = useRef<HTMLInputElement | null>(null)
 
-  function addSkill() {
-    const s = form.skillInput.trim()
-    if (!s || form.skills.includes(s)) return
-    setForm(prev => ({ ...prev, skills: [...prev.skills, s], skillInput: '' }))
-  }
+  // Resume profile state (from public.profiles)
+  const [resume, setResume] = useState<ResumeProfile>(emptyResume())
+  const [resumeLoaded, setResumeLoaded] = useState(false)
 
-  function removeSkill(skill: string) {
-    setForm(prev => ({ ...prev, skills: prev.skills.filter(s => s !== skill) }))
-  }
+  const [saving, setSaving] = useState(false)
+  const [msg, setMsg] = useState('')
+  const [error, setError] = useState('')
 
+  // Load resume profile on mount
+  useEffect(() => {
+    if (tab !== 'profile') return
+    if (resumeLoaded) return
+    async function load() {
+      const { data } = await supabase.from('profiles').select('*').eq('user_id', userId).single()
+      if (data) {
+        setResume({
+          headline: data.headline ?? '',
+          bio: data.bio ?? '',
+          linkedin_url: data.linkedin_url ?? '',
+          github_url: data.github_url ?? '',
+          portfolio_url: data.portfolio_url ?? '',
+          location: data.location ?? '',
+          education: data.education ?? [],
+          experience: data.experience ?? [],
+          projects: data.projects ?? [],
+          certifications: data.certifications ?? [],
+          achievements: data.achievements ?? [],
+          technical_skills: data.technical_skills ?? [],
+        })
+      }
+      setResumeLoaded(true)
+    }
+    load()
+  }, [tab, resumeLoaded, userId, supabase])
+
+  // ── Photo upload ───────────────────────────────────────────
   async function handlePhotoUpload(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
     if (!file) return
-    if (file.size > 2 * 1024 * 1024) { setError('Photo must be under 2 MB'); return }
-
-    setUploading(true)
-    setError('')
-
+    if (file.size > 2 * 1024 * 1024) { setError('Photo must be under 2MB'); return }
+    setPhotoUploading(true)
     const ext = file.name.split('.').pop()
     const path = `${userId}/avatar.${ext}`
-
-    const { error: upErr } = await supabase.storage
-      .from('avatars')
-      .upload(path, file, { upsert: true })
-
-    if (upErr) { setError('Upload failed: ' + upErr.message); setUploading(false); return }
-
+    const { error: upErr } = await supabase.storage.from('avatars').upload(path, file, { upsert: true })
+    if (upErr) { setError('Upload failed: ' + upErr.message); setPhotoUploading(false); return }
     const { data } = supabase.storage.from('avatars').getPublicUrl(path)
-    const url = data.publicUrl + `?t=${Date.now()}`
-    setPhotoUrl(url)
-    setUploading(false)
+    setPhotoUrl(data.publicUrl + `?t=${Date.now()}`)
+    setPhotoUploading(false)
   }
 
-  async function handleSave() {
-    setSaving(true)
-    setSaveMsg('')
-    setError('')
-
-    const { error: dbErr } = await supabase.from('users').update({
-      full_name: form.full_name,
-      phone_number: form.phone_number || null,
-      blood_group: form.blood_group || null,
-      section: form.section || null,
-      department: form.department || null,
-      roll_number: form.roll_number || null,
-      year: form.year ? parseInt(form.year) : null,
-      skills: form.skills.length ? form.skills : null,
+  // ── Save personal info ─────────────────────────────────────
+  async function savePersonal() {
+    setSaving(true); setMsg(''); setError('')
+    const { error: e } = await supabase.from('users').update({
+      full_name: personal.full_name,
+      phone_number: personal.phone_number || null,
+      blood_group: personal.blood_group || null,
+      section: personal.section || null,
+      department: personal.department || null,
+      roll_number: personal.roll_number || null,
+      year: personal.year ? parseInt(personal.year) : null,
+      skills: personal.skills.length ? personal.skills : null,
       profile_photo_url: photoUrl || null,
     }).eq('id', userId)
-
-    if (dbErr) { setError('Save failed: ' + dbErr.message) }
-    else { setSaveMsg('Profile saved successfully.') }
+    if (e) setError(e.message)
+    else setMsg('Personal info saved.')
     setSaving(false)
   }
 
+  // ── Save resume profile ────────────────────────────────────
+  async function saveResume() {
+    setSaving(true); setMsg(''); setError('')
+    const payload = {
+      user_id: userId,
+      headline: resume.headline || null,
+      bio: resume.bio || null,
+      linkedin_url: resume.linkedin_url || null,
+      github_url: resume.github_url || null,
+      portfolio_url: resume.portfolio_url || null,
+      location: resume.location || null,
+      education: resume.education,
+      experience: resume.experience,
+      projects: resume.projects,
+      certifications: resume.certifications,
+      achievements: resume.achievements,
+      technical_skills: resume.technical_skills.length ? resume.technical_skills : null,
+    }
+    const { error: e } = await supabase.from('profiles').upsert(payload, { onConflict: 'user_id' })
+    if (e) setError(e.message)
+    else setMsg('Profile saved.')
+    setSaving(false)
+  }
+
+  // ── Helpers ────────────────────────────────────────────────
+  function updR<K extends keyof ResumeProfile>(key: K, val: ResumeProfile[K]) {
+    setResume(p => ({ ...p, [key]: val }))
+    setMsg(''); setError('')
+  }
+
+  function addSkill() {
+    const s = personal.skillInput.trim()
+    if (!s || personal.skills.includes(s)) return
+    setPersonal(p => ({ ...p, skills: [...p.skills, s], skillInput: '' }))
+  }
+  function removeSkill(s: string) {
+    setPersonal(p => ({ ...p, skills: p.skills.filter(x => x !== s) }))
+  }
+
+  function addTechSkill() {
+    const s = personal.skillInput.trim()
+    if (!s || resume.technical_skills.includes(s)) return
+    updR('technical_skills', [...resume.technical_skills, s])
+    setPersonal(p => ({ ...p, skillInput: '' }))
+  }
+
   const tabStyle = (active: boolean): React.CSSProperties => ({
-    flex: 1, padding: '10px',
-    fontSize: '9px', fontWeight: 700, letterSpacing: '1.5px',
+    flex: 1, padding: '10px', fontSize: '9px', fontWeight: 700, letterSpacing: '1.5px',
     background: active ? '#1C1208' : '#F2EDE6',
     color: active ? '#F2EDE6' : '#8A6A4A',
     border: 'none', cursor: 'pointer', fontFamily: 'inherit',
@@ -136,220 +293,251 @@ export default function DashboardTabs({ profile, userId, overviewContent }: Prop
     <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
 
       {/* Tab bar */}
-      <div style={{
-        display: 'flex', borderBottom: '2px solid #1C1208',
-        background: '#F2EDE6', flexShrink: 0,
-      }}>
-        <button type="button" onClick={() => setTab('overview')} style={tabStyle(tab === 'overview')}>
-          OVERVIEW
-        </button>
-        <button type="button" onClick={() => setTab('profile')} style={tabStyle(tab === 'profile')}>
-          MY PROFILE
-        </button>
+      <div style={{ display: 'flex', borderBottom: '2px solid #1C1208', background: '#F2EDE6', flexShrink: 0 }}>
+        <button type="button" onClick={() => setTab('overview')} style={tabStyle(tab === 'overview')}>OVERVIEW</button>
+        <button type="button" onClick={() => setTab('profile')} style={tabStyle(tab === 'profile')}>MY PROFILE</button>
+        {isAdmin && (
+          <button type="button" onClick={() => setTab('accounts')} style={tabStyle(tab === 'accounts')}>ACCOUNTS</button>
+        )}
       </div>
 
-      {/* Overview tab */}
+      {/* Overview */}
       {tab === 'overview' && (
-        <div style={{ flex: 1, overflowY: 'auto' }}>
-          {overviewContent}
+        <div style={{ flex: 1, overflowY: 'auto' }}>{overviewContent}</div>
+      )}
+
+      {/* Accounts (admin only) */}
+      {tab === 'accounts' && isAdmin && (
+        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+          <AccountsTab />
         </div>
       )}
 
-      {/* Profile tab */}
+      {/* Profile */}
       {tab === 'profile' && (
-        <main style={{
-          flex: 1, overflowY: 'auto',
-          padding: 'clamp(12px, 4vw, 24px)',
-          display: 'flex', flexDirection: 'column', gap: '16px',
-        }}>
+        <main style={{ flex: 1, overflowY: 'auto', padding: 'clamp(12px,4vw,24px)', display: 'flex', flexDirection: 'column', gap: '14px' }}>
 
-          {/* Photo + name row */}
-          <div style={{
-            display: 'flex', alignItems: 'center', gap: '20px',
-            flexWrap: 'wrap',
-          }}>
-            {/* Avatar */}
-            <div
-              onClick={() => fileRef.current?.click()}
-              style={{
-                width: '80px', height: '80px', flexShrink: 0,
-                border: '2px solid #1C1208', cursor: 'pointer',
-                background: '#E8DDD0', position: 'relative',
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                overflow: 'hidden',
-              }}
-            >
+          {/* Avatar + name hero */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '20px', flexWrap: 'wrap' }}>
+            <div onClick={() => fileRef.current?.click()} style={{
+              width: '80px', height: '80px', flexShrink: 0, border: '2px solid #1C1208',
+              cursor: 'pointer', background: '#E8DDD0', position: 'relative',
+              display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden',
+            }}>
               {photoUrl
                 ? <img src={photoUrl} alt="avatar" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                : <span style={{ fontSize: '28px', fontWeight: 700, color: '#8A6A4A' }}>
-                    {form.full_name.charAt(0).toUpperCase() || '?'}
-                  </span>
+                : <span style={{ fontSize: '28px', fontWeight: 700, color: '#8A6A4A' }}>{personal.full_name.charAt(0).toUpperCase() || '?'}</span>
               }
               <div style={{
                 position: 'absolute', bottom: 0, left: 0, right: 0,
                 background: 'rgba(28,18,8,0.65)', padding: '3px',
-                fontSize: '7px', fontWeight: 700, color: '#F2EDE6',
-                letterSpacing: '1px', textAlign: 'center',
+                fontSize: '7px', fontWeight: 700, color: '#F2EDE6', letterSpacing: '1px', textAlign: 'center',
               }}>
-                {uploading ? 'UPLOADING...' : 'CHANGE'}
+                {photoUploading ? 'UPLOADING...' : 'CHANGE'}
               </div>
             </div>
             <input ref={fileRef} type="file" accept="image/*" style={{ display: 'none' }} onChange={handlePhotoUpload} />
-
-            {/* Name + roll + dept */}
-            <div style={{ flex: 1, minWidth: '180px' }}>
-              <div style={{ fontSize: '18px', fontWeight: 700, color: '#1C1208', letterSpacing: '0.5px' }}>
-                {form.full_name || '—'}
-              </div>
-              <div style={{ fontSize: '11px', color: '#8A6A4A', marginTop: '4px' }}>
-                {form.roll_number || 'No roll number'} · {form.department || 'No dept'}
+            <div style={{ flex: 1 }}>
+              <div style={{ fontSize: '20px', fontWeight: 700, color: '#1C1208' }}>{personal.full_name || '—'}</div>
+              <div style={{ fontSize: '11px', color: '#8A6A4A', marginTop: '3px' }}>
+                {resume.headline || <span style={{ fontStyle: 'italic', color: '#C8A878' }}>Add a headline...</span>}
               </div>
               <div style={{ fontSize: '10px', color: '#8A6A4A', marginTop: '2px' }}>
-                {form.year ? `Year ${form.year}` : ''}{form.section ? ` · Sec ${form.section}` : ''}
+                {personal.department}{personal.year ? ` · Year ${personal.year}` : ''}{personal.section ? ` · Sec ${personal.section}` : ''}
               </div>
             </div>
           </div>
 
-          {/* Form */}
-          <div style={{ border: '1.5px solid #1C1208', background: '#FDFAF5' }}>
-            <div style={{
-              borderBottom: '1.5px solid #1C1208', padding: '10px 18px',
-              fontSize: '9px', fontWeight: 700, letterSpacing: '2px', color: '#8A6A4A',
-            }}>
-              PERSONAL INFO
-            </div>
-            <div style={{ padding: '20px 18px', display: 'flex', flexDirection: 'column', gap: '14px' }}>
+          {msg && <div style={{ fontSize: '11px', color: '#3D7A50', borderLeft: '2px solid #3D7A50', paddingLeft: '10px' }}>{msg}</div>}
+          {error && <div style={{ fontSize: '11px', color: '#D94F00', borderLeft: '2px solid #D94F00', paddingLeft: '10px' }}>{error}</div>}
 
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: '12px' }}>
+          {/* ── Personal Information ── */}
+          <Section title="PERSONAL INFORMATION">
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+              <Grid>
+                <Field label="FULL NAME" value={personal.full_name} onChange={v => setPersonal(p => ({ ...p, full_name: v }))} />
+                <Field label="PHONE NUMBER" value={personal.phone_number} onChange={v => setPersonal(p => ({ ...p, phone_number: v }))} placeholder="+91 XXXXX XXXXX" />
+              </Grid>
+              <Grid>
+                <Field label="ROLL NUMBER" value={personal.roll_number} onChange={v => setPersonal(p => ({ ...p, roll_number: v }))} placeholder="160122737XXX" />
                 <div>
-                  <label style={labelStyle}>FULL NAME</label>
-                  <input type="text" value={form.full_name} onChange={e => update('full_name', e.target.value)} style={inputStyle} />
-                </div>
-                <div>
-                  <label style={labelStyle}>PHONE NUMBER</label>
-                  <input type="tel" value={form.phone_number} onChange={e => update('phone_number', e.target.value)} placeholder="+91 XXXXX XXXXX" style={inputStyle} />
-                </div>
-              </div>
-
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: '12px' }}>
-                <div>
-                  <label style={labelStyle}>ROLL NUMBER</label>
-                  <input type="text" value={form.roll_number} onChange={e => update('roll_number', e.target.value)} placeholder="160122737XXX" style={inputStyle} />
-                </div>
-                <div>
-                  <label style={labelStyle}>BLOOD GROUP</label>
-                  <select value={form.blood_group} onChange={e => update('blood_group', e.target.value)} style={{ ...inputStyle, cursor: 'pointer' }}>
+                  <label style={lbl}>BLOOD GROUP</label>
+                  <select value={personal.blood_group} onChange={e => setPersonal(p => ({ ...p, blood_group: e.target.value }))} style={{ ...inp, cursor: 'pointer' }}>
                     <option value="">Select</option>
                     {BLOOD_GROUPS.map(b => <option key={b} value={b}>{b}</option>)}
                   </select>
                 </div>
-              </div>
-
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(100px, 1fr))', gap: '12px' }}>
+              </Grid>
+              <Grid>
+                <Field label="DEPARTMENT" value={personal.department} onChange={v => setPersonal(p => ({ ...p, department: v }))} />
                 <div>
-                  <label style={labelStyle}>DEPARTMENT</label>
-                  <input type="text" value={form.department} onChange={e => update('department', e.target.value)} style={inputStyle} />
-                </div>
-                <div>
-                  <label style={labelStyle}>YEAR</label>
-                  <select value={form.year} onChange={e => update('year', e.target.value)} style={{ ...inputStyle, cursor: 'pointer' }}>
+                  <label style={lbl}>YEAR</label>
+                  <select value={personal.year} onChange={e => setPersonal(p => ({ ...p, year: e.target.value }))} style={{ ...inp, cursor: 'pointer' }}>
                     <option value="">Select</option>
-                    <option value="1">1st Year</option>
-                    <option value="2">2nd Year</option>
-                    <option value="3">3rd Year</option>
-                    <option value="4">4th Year</option>
+                    {['1','2','3','4'].map(y => <option key={y} value={y}>{y}{['st','nd','rd','th'][+y-1]} Year</option>)}
                   </select>
                 </div>
-                <div>
-                  <label style={labelStyle}>SECTION</label>
-                  <input type="text" value={form.section} onChange={e => update('section', e.target.value.toUpperCase())} placeholder="A" maxLength={2} style={inputStyle} />
+                <Field label="SECTION" value={personal.section} onChange={v => setPersonal(p => ({ ...p, section: v.toUpperCase() }))} placeholder="A" />
+              </Grid>
+
+              {/* Technical skills (used for AI planner) */}
+              <div>
+                <label style={lbl}>SKILLS (FOR AI PLANNER)</label>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginBottom: '8px' }}>
+                  {personal.skills.map(s => (
+                    <div key={s} style={{ display: 'flex', alignItems: 'center', gap: '5px', background: '#1C1208', color: '#F2EDE6', padding: '3px 9px', fontSize: '10px', fontWeight: 700 }}>
+                      {s}
+                      <button type="button" onClick={() => removeSkill(s)} style={{ background: 'transparent', border: 'none', color: '#C8A878', cursor: 'pointer', fontSize: '12px', padding: 0, fontFamily: 'inherit' }}>×</button>
+                    </div>
+                  ))}
+                </div>
+                <div style={{ display: 'flex', gap: '8px' }}>
+                  <input type="text" value={personal.skillInput} onChange={e => setPersonal(p => ({ ...p, skillInput: e.target.value }))} onKeyDown={e => e.key === 'Enter' && addSkill()} placeholder="e.g. Python, ML" style={{ ...inp, flex: 1 }} />
+                  <button type="button" onClick={addSkill} style={{ background: '#1C1208', color: '#F2EDE6', border: 'none', padding: '0 16px', fontSize: '10px', fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap' }}>ADD</button>
                 </div>
               </div>
 
+              <button type="button" onClick={savePersonal} disabled={saving} style={{ background: saving ? '#8A6A4A' : '#1C1208', color: '#F2EDE6', border: 'none', padding: '11px', fontSize: '10px', fontWeight: 700, letterSpacing: '2px', cursor: saving ? 'not-allowed' : 'pointer', fontFamily: 'inherit' }}>
+                {saving ? 'SAVING...' : 'SAVE PERSONAL INFO →'}
+              </button>
             </div>
-          </div>
+          </Section>
 
-          {/* Skills */}
-          <div style={{ border: '1.5px solid #1C1208', background: '#FDFAF5' }}>
-            <div style={{
-              borderBottom: '1.5px solid #1C1208', padding: '10px 18px',
-              fontSize: '9px', fontWeight: 700, letterSpacing: '2px', color: '#8A6A4A',
-            }}>
-              SKILLS
+          {/* ── Professional Summary ── */}
+          <Section title="PROFESSIONAL SUMMARY">
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+              <Field label="HEADLINE" value={resume.headline} onChange={v => updR('headline', v)} placeholder="e.g. AI/ML Engineer · CBIT 2026" />
+              <TextArea label="BIO / SUMMARY" value={resume.bio} onChange={v => updR('bio', v)} rows={4} placeholder="Write a short professional summary..." />
+              <Grid>
+                <Field label="LOCATION" value={resume.location} onChange={v => updR('location', v)} placeholder="Hyderabad, India" />
+                <Field label="LINKEDIN" value={resume.linkedin_url} onChange={v => updR('linkedin_url', v)} placeholder="https://linkedin.com/in/..." />
+                <Field label="GITHUB" value={resume.github_url} onChange={v => updR('github_url', v)} placeholder="https://github.com/..." />
+                <Field label="PORTFOLIO" value={resume.portfolio_url} onChange={v => updR('portfolio_url', v)} placeholder="https://yoursite.com" />
+              </Grid>
             </div>
-            <div style={{ padding: '20px 18px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
-              <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-                {form.skills.map(skill => (
-                  <div key={skill} style={{
-                    display: 'flex', alignItems: 'center', gap: '6px',
-                    background: '#1C1208', color: '#F2EDE6',
-                    padding: '4px 10px', fontSize: '10px', fontWeight: 700, letterSpacing: '0.5px',
-                  }}>
-                    {skill}
-                    <button
-                      type="button"
-                      onClick={() => removeSkill(skill)}
-                      style={{
-                        background: 'transparent', border: 'none', color: '#C8A878',
-                        cursor: 'pointer', fontSize: '12px', lineHeight: 1, padding: 0,
-                        fontFamily: 'inherit',
-                      }}
-                    >×</button>
-                  </div>
-                ))}
-                {form.skills.length === 0 && (
-                  <span style={{ fontSize: '11px', color: '#8A6A4A' }}>No skills added yet</span>
-                )}
-              </div>
-              <div style={{ display: 'flex', gap: '8px' }}>
-                <input
-                  type="text"
-                  value={form.skillInput}
-                  onChange={e => setForm(p => ({ ...p, skillInput: e.target.value }))}
-                  onKeyDown={e => e.key === 'Enter' && addSkill()}
-                  placeholder="e.g. Python, Machine Learning"
-                  style={{ ...inputStyle, flex: 1 }}
-                />
-                <button
-                  type="button"
-                  onClick={addSkill}
-                  style={{
-                    background: '#1C1208', color: '#F2EDE6', border: 'none',
-                    padding: '0 16px', fontSize: '10px', fontWeight: 700,
-                    letterSpacing: '1px', cursor: 'pointer', fontFamily: 'inherit',
-                    whiteSpace: 'nowrap',
-                  }}
-                >ADD</button>
-              </div>
-            </div>
-          </div>
+          </Section>
 
-          {/* Error / success */}
-          {error && (
-            <div style={{ fontSize: '11px', color: '#D94F00', borderLeft: '2px solid #D94F00', paddingLeft: '10px' }}>
-              {error}
-            </div>
-          )}
-          {saveMsg && (
-            <div style={{ fontSize: '11px', color: '#3D7A50', borderLeft: '2px solid #3D7A50', paddingLeft: '10px' }}>
-              {saveMsg}
-            </div>
-          )}
+          {/* ── Education ── */}
+          <Section title="EDUCATION" action={<AddBtn onClick={() => updR('education', [...resume.education, { institution: '', degree: '', year: '', gpa: '' }])} />}>
+            {resume.education.length === 0
+              ? <div style={{ fontSize: '11px', color: '#8A6A4A', fontStyle: 'italic' }}>No education added yet. Click ADD to start.</div>
+              : resume.education.map((e, i) => (
+                <div key={i} style={{ border: '1px solid #E0D0B8', padding: '14px', marginBottom: '10px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                  <Grid>
+                    <Field label="INSTITUTION" value={e.institution} onChange={v => { const a = [...resume.education]; a[i] = { ...a[i], institution: v }; updR('education', a) }} placeholder="CBIT, Hyderabad" />
+                    <Field label="DEGREE" value={e.degree} onChange={v => { const a = [...resume.education]; a[i] = { ...a[i], degree: v }; updR('education', a) }} placeholder="B.Tech AI & ML" />
+                    <Field label="YEAR" value={e.year} onChange={v => { const a = [...resume.education]; a[i] = { ...a[i], year: v }; updR('education', a) }} placeholder="2022 – 2026" />
+                    <Field label="GPA / PERCENTAGE" value={e.gpa} onChange={v => { const a = [...resume.education]; a[i] = { ...a[i], gpa: v }; updR('education', a) }} placeholder="8.5 / 10" />
+                  </Grid>
+                  <DeleteBtn onClick={() => updR('education', resume.education.filter((_, j) => j !== i))} />
+                </div>
+              ))
+            }
+          </Section>
 
-          {/* Save button */}
-          <button
-            type="button"
-            onClick={handleSave}
-            disabled={saving || uploading}
-            style={{
-              background: saving ? '#8A6A4A' : '#1C1208',
-              color: '#F2EDE6', border: 'none', padding: '13px',
-              fontSize: '10px', fontWeight: 700, letterSpacing: '2px',
-              cursor: saving ? 'not-allowed' : 'pointer',
-              fontFamily: 'inherit', width: '100%',
-            }}
-          >
-            {saving ? 'SAVING...' : 'SAVE PROFILE →'}
+          {/* ── Experience ── */}
+          <Section title="EXPERIENCE" action={<AddBtn onClick={() => updR('experience', [...resume.experience, { company: '', role: '', start: '', end: '', description: '' }])} />}>
+            {resume.experience.length === 0
+              ? <div style={{ fontSize: '11px', color: '#8A6A4A', fontStyle: 'italic' }}>No experience added yet.</div>
+              : resume.experience.map((e, i) => (
+                <div key={i} style={{ border: '1px solid #E0D0B8', padding: '14px', marginBottom: '10px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                  <Grid>
+                    <Field label="COMPANY / ORGANISATION" value={e.company} onChange={v => { const a = [...resume.experience]; a[i] = { ...a[i], company: v }; updR('experience', a) }} placeholder="Google, Startup, etc." />
+                    <Field label="ROLE / POSITION" value={e.role} onChange={v => { const a = [...resume.experience]; a[i] = { ...a[i], role: v }; updR('experience', a) }} placeholder="Software Intern" />
+                    <Field label="START DATE" value={e.start} onChange={v => { const a = [...resume.experience]; a[i] = { ...a[i], start: v }; updR('experience', a) }} placeholder="June 2024" />
+                    <Field label="END DATE" value={e.end} onChange={v => { const a = [...resume.experience]; a[i] = { ...a[i], end: v }; updR('experience', a) }} placeholder="Aug 2024 or Present" />
+                  </Grid>
+                  <TextArea label="DESCRIPTION" value={e.description} onChange={v => { const a = [...resume.experience]; a[i] = { ...a[i], description: v }; updR('experience', a) }} rows={3} placeholder="Describe your responsibilities and achievements..." />
+                  <DeleteBtn onClick={() => updR('experience', resume.experience.filter((_, j) => j !== i))} />
+                </div>
+              ))
+            }
+          </Section>
+
+          {/* ── Technical Skills ── */}
+          <Section title="TECHNICAL SKILLS">
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginBottom: '10px' }}>
+              {resume.technical_skills.map(s => (
+                <div key={s} style={{ display: 'flex', alignItems: 'center', gap: '5px', background: '#1C1208', color: '#F2EDE6', padding: '4px 10px', fontSize: '10px', fontWeight: 700 }}>
+                  {s}
+                  <button type="button" onClick={() => updR('technical_skills', resume.technical_skills.filter(x => x !== s))} style={{ background: 'transparent', border: 'none', color: '#C8A878', cursor: 'pointer', fontSize: '12px', padding: 0, fontFamily: 'inherit' }}>×</button>
+                </div>
+              ))}
+              {resume.technical_skills.length === 0 && <span style={{ fontSize: '11px', color: '#8A6A4A', fontStyle: 'italic' }}>No skills added yet.</span>}
+            </div>
+            <div style={{ display: 'flex', gap: '8px' }}>
+              <input
+                type="text"
+                value={personal.skillInput}
+                onChange={e => setPersonal(p => ({ ...p, skillInput: e.target.value }))}
+                onKeyDown={e => e.key === 'Enter' && addTechSkill()}
+                placeholder="e.g. React, Python, TensorFlow"
+                style={{ ...inp, flex: 1 }}
+              />
+              <button type="button" onClick={addTechSkill} style={{ background: '#1C1208', color: '#F2EDE6', border: 'none', padding: '0 16px', fontSize: '10px', fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap' }}>ADD</button>
+            </div>
+          </Section>
+
+          {/* ── Projects ── */}
+          <Section title="PROJECTS" action={<AddBtn onClick={() => updR('projects', [...resume.projects, { name: '', description: '', tech: '', url: '' }])} />}>
+            {resume.projects.length === 0
+              ? <div style={{ fontSize: '11px', color: '#8A6A4A', fontStyle: 'italic' }}>No projects added yet.</div>
+              : resume.projects.map((p, i) => (
+                <div key={i} style={{ border: '1px solid #E0D0B8', padding: '14px', marginBottom: '10px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                  <Grid>
+                    <Field label="PROJECT NAME" value={p.name} onChange={v => { const a = [...resume.projects]; a[i] = { ...a[i], name: v }; updR('projects', a) }} placeholder="SETHU Campus Platform" />
+                    <Field label="TECH STACK" value={p.tech} onChange={v => { const a = [...resume.projects]; a[i] = { ...a[i], tech: v }; updR('projects', a) }} placeholder="Next.js, FastAPI, Supabase" />
+                    <Field label="URL / LINK" value={p.url} onChange={v => { const a = [...resume.projects]; a[i] = { ...a[i], url: v }; updR('projects', a) }} placeholder="https://github.com/..." />
+                  </Grid>
+                  <TextArea label="DESCRIPTION" value={p.description} onChange={v => { const a = [...resume.projects]; a[i] = { ...a[i], description: v }; updR('projects', a) }} rows={3} placeholder="What does this project do? What problem does it solve?" />
+                  <DeleteBtn onClick={() => updR('projects', resume.projects.filter((_, j) => j !== i))} />
+                </div>
+              ))
+            }
+          </Section>
+
+          {/* ── Certifications ── */}
+          <Section title="CERTIFICATIONS" action={<AddBtn onClick={() => updR('certifications', [...resume.certifications, { name: '', issuer: '', date: '', url: '' }])} />}>
+            {resume.certifications.length === 0
+              ? <div style={{ fontSize: '11px', color: '#8A6A4A', fontStyle: 'italic' }}>No certifications added yet.</div>
+              : resume.certifications.map((c, i) => (
+                <div key={i} style={{ border: '1px solid #E0D0B8', padding: '14px', marginBottom: '10px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                  <Grid>
+                    <Field label="CERTIFICATION NAME" value={c.name} onChange={v => { const a = [...resume.certifications]; a[i] = { ...a[i], name: v }; updR('certifications', a) }} placeholder="AWS Cloud Practitioner" />
+                    <Field label="ISSUING ORGANISATION" value={c.issuer} onChange={v => { const a = [...resume.certifications]; a[i] = { ...a[i], issuer: v }; updR('certifications', a) }} placeholder="Amazon Web Services" />
+                    <Field label="DATE" value={c.date} onChange={v => { const a = [...resume.certifications]; a[i] = { ...a[i], date: v }; updR('certifications', a) }} placeholder="March 2024" />
+                    <Field label="CREDENTIAL URL" value={c.url} onChange={v => { const a = [...resume.certifications]; a[i] = { ...a[i], url: v }; updR('certifications', a) }} placeholder="https://..." />
+                  </Grid>
+                  <DeleteBtn onClick={() => updR('certifications', resume.certifications.filter((_, j) => j !== i))} />
+                </div>
+              ))
+            }
+          </Section>
+
+          {/* ── Leadership & Achievements ── */}
+          <Section title="LEADERSHIP & ACHIEVEMENTS" action={<AddBtn onClick={() => updR('achievements', [...resume.achievements, { title: '', description: '', date: '' }])} />}>
+            {resume.achievements.length === 0
+              ? <div style={{ fontSize: '11px', color: '#8A6A4A', fontStyle: 'italic' }}>No achievements added yet.</div>
+              : resume.achievements.map((a, i) => (
+                <div key={i} style={{ border: '1px solid #E0D0B8', padding: '14px', marginBottom: '10px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                  <Grid>
+                    <Field label="TITLE" value={a.title} onChange={v => { const arr = [...resume.achievements]; arr[i] = { ...arr[i], title: v }; updR('achievements', arr) }} placeholder="Technical Fest Winner" />
+                    <Field label="DATE" value={a.date} onChange={v => { const arr = [...resume.achievements]; arr[i] = { ...arr[i], date: v }; updR('achievements', arr) }} placeholder="Oct 2023" />
+                  </Grid>
+                  <TextArea label="DESCRIPTION" value={a.description} onChange={v => { const arr = [...resume.achievements]; arr[i] = { ...arr[i], description: v }; updR('achievements', arr) }} rows={2} placeholder="Brief description of the achievement..." />
+                  <DeleteBtn onClick={() => updR('achievements', resume.achievements.filter((_, j) => j !== i))} />
+                </div>
+              ))
+            }
+          </Section>
+
+          {/* Save all resume sections */}
+          <button type="button" onClick={saveResume} disabled={saving} style={{
+            background: saving ? '#8A6A4A' : '#D94F00', color: '#F2EDE6', border: 'none',
+            padding: '13px', fontSize: '10px', fontWeight: 700, letterSpacing: '2px',
+            cursor: saving ? 'not-allowed' : 'pointer', fontFamily: 'inherit',
+          }}>
+            {saving ? 'SAVING...' : 'SAVE FULL PROFILE →'}
           </button>
 
         </main>

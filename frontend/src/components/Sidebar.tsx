@@ -10,43 +10,125 @@ type SidebarProps = {
   department: string
   year: number | null
   role?: string
+  section?: string | null
 }
 
-export default function Sidebar({ fullName, department, year, role = 'student' }: SidebarProps) {
-  const pathname = usePathname()
-  const router = useRouter()
-  const supabase = createClient()
-  const [expanded, setExpanded] = useState(false)
+type NavItem = { label: string; href: string; external?: boolean }
+type NavGroup = { group: string; items: NavItem[] }
 
-  const NAV = role === 'student'
-    ? [
+function getNav(role: string): NavGroup[] {
+  switch (role) {
+    case 'student':
+      return [
         { group: 'ACADEMIC', items: [
-          { label: 'Dashboard', href: '/dashboard' },
+          { label: 'Dashboard',  href: '/dashboard' },
           { label: 'Timetable', href: '/timetable' },
-          { label: 'Subjects', href: '/subjects' },
+          { label: 'Subjects',  href: '/subjects' },
           { label: 'Deadlines', href: '/deadlines' },
         ]},
         { group: 'INTELLIGENCE', items: [
           { label: 'AI Planner', href: '/planner' },
         ]},
         { group: 'SERVICES', items: [
-          { label: 'Requests', href: '/requests' },
+          { label: 'Requests',  href: '/requests' },
           { label: 'Documents', href: '/documents' },
         ]},
-      ]
-    : [
-        { group: 'STAFF', items: [
-          { label: 'Approvals', href: '/approvals' },
+        { group: 'EXPLORE', items: [
+          { label: 'Jobs', href: 'https://job-recommender-sigma.vercel.app/', external: true },
         ]},
       ]
+
+    case 'faculty':
+      return [
+        { group: 'OVERVIEW', items: [
+          { label: 'Dashboard',      href: '/dashboard' },
+          { label: 'Notifications',  href: '/notifications' },
+        ]},
+        { group: 'MANAGE', items: [
+          { label: 'Timetable',  href: '/timetable' },
+          { label: 'Subjects',   href: '/subjects' },
+          { label: 'Deadlines',  href: '/deadlines' },
+        ]},
+        { group: 'APPROVALS', items: [
+          { label: 'Requests',  href: '/approvals' },
+          { label: 'Documents', href: '/documents' },
+        ]},
+        { group: 'EXPLORE', items: [
+          { label: 'Jobs', href: 'https://job-recommender-sigma.vercel.app/', external: true },
+        ]},
+      ]
+
+    case 'hod':
+      return [
+        { group: 'OVERVIEW', items: [
+          { label: 'Dashboard',     href: '/dashboard' },
+          { label: 'Notifications', href: '/notifications' },
+        ]},
+        { group: 'MANAGE', items: [
+          { label: 'Timetable', href: '/timetable' },
+          { label: 'Subjects',  href: '/subjects' },
+          { label: 'Deadlines', href: '/deadlines' },
+        ]},
+        { group: 'APPROVALS', items: [
+          { label: 'Requests',  href: '/approvals' },
+          { label: 'Documents', href: '/documents' },
+        ]},
+        { group: 'EXPLORE', items: [
+          { label: 'Jobs', href: 'https://job-recommender-sigma.vercel.app/', external: true },
+        ]},
+      ]
+
+    case 'admin':
+      return [
+        { group: 'OVERVIEW', items: [
+          { label: 'Dashboard',     href: '/dashboard' },
+          { label: 'Notifications', href: '/notifications' },
+        ]},
+        { group: 'INSTITUTION', items: [
+          { label: 'Approvals',  href: '/approvals' },
+          { label: 'Documents',  href: '/documents' },
+          { label: 'Deadlines',  href: '/deadlines' },
+        ]},
+        { group: 'EXPLORE', items: [
+          { label: 'Jobs', href: 'https://job-recommender-sigma.vercel.app/', external: true },
+        ]},
+      ]
+
+    default:
+      return []
+  }
+}
+
+function roleLabel(role: string, year: number | null, section: string | null | undefined): string {
+  if (role === 'student' && year) {
+    const suffix = ['ST','ND','RD','TH'][year - 1] ?? 'TH'
+    return `${year}${suffix} YEAR${section ? ` · SEC ${section}` : ''}`
+  }
+  return role.toUpperCase()
+}
+
+function roleBadgeColor(role: string): string {
+  switch (role) {
+    case 'admin':   return '#D94F00'
+    case 'hod':     return '#3D7A50'
+    case 'faculty': return '#8A6A4A'
+    default:        return '#D94F00' // student
+  }
+}
+
+export default function Sidebar({ fullName, department, year, role = 'student', section }: SidebarProps) {
+  const pathname = usePathname()
+  const router   = useRouter()
+  const supabase = createClient()
+  const [expanded, setExpanded] = useState(false)
+
+  const NAV = getNav(role)
 
   async function handleLogout() {
     await supabase.auth.signOut()
     router.push('/login')
     router.refresh()
   }
-
-  const yearLabel = year ? `${year}${['ST','ND','RD','TH'][year - 1] || 'TH'} YEAR` : role.toUpperCase()
 
   return (
     <>
@@ -56,11 +138,10 @@ export default function Sidebar({ fullName, department, year, role = 'student' }
 
       <aside className={`sethu-sidebar ${expanded ? 'sethu-sidebar-expanded' : ''}`} style={{
         width: '200px', minWidth: '200px', background: '#1C1208',
-        display: 'flex', flexDirection: 'column', minHeight: '100vh',
-        flexShrink: 0,
+        display: 'flex', flexDirection: 'column', minHeight: '100vh', flexShrink: 0,
       }}>
 
-        {/* Wordmark + mobile toggle */}
+        {/* Wordmark */}
         <div style={{
           padding: '22px 20px 18px', borderBottom: '1px solid #2E1E10',
           display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between',
@@ -71,10 +152,10 @@ export default function Sidebar({ fullName, department, year, role = 'student' }
             </div>
             <div style={{ width: '28px', height: '2px', background: '#D94F00', margin: '8px 0 0' }} />
             <div style={{ fontSize: '8px', color: '#6A4A2A', letterSpacing: '1.5px', marginTop: '8px' }}>
-              CBIT · {department}
+              CBIT · {department || 'CAMPUS'}
             </div>
           </div>
-          <div className="sethu-wordmark-collapsed" style={{ fontSize: '18px', fontWeight: 700, color: '#F2EDE6', letterSpacing: '1px' }}>
+          <div className="sethu-wordmark-collapsed" style={{ fontSize: '18px', fontWeight: 700, color: '#F2EDE6' }}>
             S
           </div>
           <button
@@ -92,41 +173,59 @@ export default function Sidebar({ fullName, department, year, role = 'student' }
           </button>
         </div>
 
+        {/* Role badge */}
+        <div className="sethu-nav-label" style={{
+          margin: '10px 20px 0',
+          display: 'inline-flex', alignSelf: 'flex-start',
+          background: roleBadgeColor(role),
+          color: '#F2EDE6', fontSize: '7px', fontWeight: 700,
+          letterSpacing: '1.5px', padding: '3px 8px',
+        }}>
+          {role.toUpperCase()}
+        </div>
+
         {/* Nav */}
-        <nav style={{ flex: 1, padding: '10px 0' }}>
+        <nav style={{ flex: 1, padding: '6px 0' }}>
           {NAV.map(group => (
             <div key={group.group}>
               <div className="sethu-nav-label" style={{
                 fontSize: '8px', letterSpacing: '2px', color: '#4A3020',
-                padding: '14px 20px 5px', fontWeight: 700,
+                padding: '12px 20px 4px', fontWeight: 700,
               }}>
                 {group.group}
               </div>
               {group.items.map(item => {
-                const active = pathname === item.href
+                const active = !item.external && pathname === item.href
+                const linkProps = item.external
+                  ? { href: item.href, target: '_blank', rel: 'noopener noreferrer' }
+                  : { href: item.href }
+
                 return (
-                  <Link key={item.href} href={item.href} className="sethu-nav-link" style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '10px',
-                    padding: '8px 20px',
-                    fontSize: '11px',
-                    letterSpacing: '0.5px',
-                    textDecoration: 'none',
-                    color: active ? '#F2EDE6' : '#8A6A4A',
-                    background: active ? '#261A0A' : 'transparent',
-                    borderLeft: active ? '2px solid #D94F00' : '2px solid transparent',
-                    fontWeight: active ? 700 : 400,
-                  }}>
+                  <Link
+                    key={item.href}
+                    {...linkProps}
+                    className="sethu-nav-link"
+                    style={{
+                      display: 'flex', alignItems: 'center', gap: '10px',
+                      padding: '8px 20px', fontSize: '11px', letterSpacing: '0.5px',
+                      textDecoration: 'none',
+                      color: active ? '#F2EDE6' : item.external ? '#C8A878' : '#8A6A4A',
+                      background: active ? '#261A0A' : 'transparent',
+                      borderLeft: active ? '2px solid #D94F00' : '2px solid transparent',
+                      fontWeight: active ? 700 : 400,
+                    }}
+                  >
                     <span className="sethu-nav-icon" style={{
                       width: '20px', height: '20px', flexShrink: 0,
                       display: 'flex', alignItems: 'center', justifyContent: 'center',
                       fontSize: '10px', fontWeight: 700,
                       border: '1px solid currentColor', borderRadius: '3px',
                     }}>
-                      {item.label.charAt(0)}
+                      {item.external ? '↗' : item.label.charAt(0)}
                     </span>
-                    <span className="sethu-nav-label">{item.label}</span>
+                    <span className="sethu-nav-label">
+                      {item.label}{item.external ? ' ↗' : ''}
+                    </span>
                   </Link>
                 )
               })}
@@ -138,7 +237,7 @@ export default function Sidebar({ fullName, department, year, role = 'student' }
         <div style={{ padding: '16px 20px', borderTop: '1px solid #2E1E10' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '9px', marginBottom: '12px' }}>
             <div style={{
-              width: '26px', height: '26px', background: '#D94F00',
+              width: '26px', height: '26px', background: roleBadgeColor(role),
               display: 'flex', alignItems: 'center', justifyContent: 'center',
               fontSize: '10px', fontWeight: 700, color: '#F2EDE6', flexShrink: 0,
             }}>
@@ -152,7 +251,7 @@ export default function Sidebar({ fullName, department, year, role = 'student' }
                 {fullName}
               </div>
               <div style={{ fontSize: '8px', color: '#4A3020', letterSpacing: '1px' }}>
-                {yearLabel}
+                {roleLabel(role, year, section)}
               </div>
             </div>
           </div>
@@ -174,73 +273,33 @@ export default function Sidebar({ fullName, department, year, role = 'student' }
       </aside>
 
       <style jsx>{`
-        .sethu-sidebar-toggle {
-          display: none;
-        }
-        .sethu-wordmark-collapsed {
-          display: none;
-        }
+        .sethu-sidebar-toggle { display: none; }
+        .sethu-wordmark-collapsed { display: none; }
         .sethu-backdrop {
-          display: none;
-          position: fixed;
-          inset: 0;
-          background: rgba(28, 18, 8, 0.45);
-          z-index: 90;
+          display: none; position: fixed; inset: 0;
+          background: rgba(28,18,8,0.45); z-index: 90;
         }
 
         @media (max-width: 760px) {
-          .sethu-sidebar {
-            width: 56px !important;
-            min-width: 56px !important;
-          }
-          .sethu-sidebar-toggle {
-            display: flex;
-            align-items: center;
-            justify-content: center;
-          }
-          .sethu-wordmark-full {
-            display: none;
-          }
-          .sethu-wordmark-collapsed {
-            display: block;
-          }
-          .sethu-nav-label {
-            display: none;
-          }
-          .sethu-nav-link {
-            justify-content: center;
-            padding: 10px 0 !important;
-          }
-          .sethu-backdrop {
-            display: block;
-          }
+          .sethu-sidebar { width: 56px !important; min-width: 56px !important; }
+          .sethu-sidebar-toggle { display: flex; align-items: center; justify-content: center; }
+          .sethu-wordmark-full { display: none; }
+          .sethu-wordmark-collapsed { display: block; }
+          .sethu-nav-label { display: none; }
+          .sethu-nav-link { justify-content: center; padding: 10px 0 !important; }
+          .sethu-backdrop { display: block; }
 
           .sethu-sidebar-expanded {
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 220px !important;
-            min-width: 220px !important;
-            height: 100vh;
-            z-index: 100;
-            box-shadow: 4px 0 16px rgba(0, 0, 0, 0.3);
+            position: fixed; top: 0; left: 0;
+            width: 220px !important; min-width: 220px !important;
+            height: 100vh; z-index: 100;
+            box-shadow: 4px 0 16px rgba(0,0,0,0.3);
           }
-          .sethu-sidebar-expanded .sethu-wordmark-full {
-            display: block;
-          }
-          .sethu-sidebar-expanded .sethu-wordmark-collapsed {
-            display: none;
-          }
-          .sethu-sidebar-expanded .sethu-nav-label {
-            display: block;
-          }
-          .sethu-sidebar-expanded .sethu-nav-link {
-            justify-content: flex-start;
-            padding: 8px 20px !important;
-          }
-          .sethu-sidebar-expanded .sethu-nav-icon {
-            display: none;
-          }
+          .sethu-sidebar-expanded .sethu-wordmark-full { display: block; }
+          .sethu-sidebar-expanded .sethu-wordmark-collapsed { display: none; }
+          .sethu-sidebar-expanded .sethu-nav-label { display: block; }
+          .sethu-sidebar-expanded .sethu-nav-link { justify-content: flex-start; padding: 8px 20px !important; }
+          .sethu-sidebar-expanded .sethu-nav-icon { display: none; }
         }
       `}</style>
     </>
