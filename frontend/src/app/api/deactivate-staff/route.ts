@@ -28,8 +28,8 @@ export async function POST(req: Request) {
 
     // Deactivate: ban the user in Supabase Auth
     const banned = action === 'deactivate'
-    const { error } = await admin.auth.admin.updateUser(userId, {
-      ban_duration: banned ? '876600h' : 'none', // 100 years = effectively banned
+    const { error } = await admin.auth.admin.updateUserById(userId, {
+      ban_duration: banned ? '876600h' : 'none',
     })
     if (error) return NextResponse.json({ error: error.message }, { status: 400 })
 
