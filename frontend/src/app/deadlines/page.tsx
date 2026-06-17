@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { createClient } from '@/lib/supabase/client'
+import { SkeletonList, SkeletonStyles } from '@/components/SkeletonLoader'
 
 // ── Types ──────────────────────────────────────────────────────
 type Deadline = {
@@ -249,7 +250,10 @@ export default function DeadlinesPage() {
   }
 
   const myId = me?.id
+  // Filter: expired faculty deadlines don't show in pending view
+  const now = new Date()
   const filtered = deadlines.filter(d => {
+    if (d.source === 'faculty' && !d.is_done && new Date(d.due_date) < now && filter !== 'done') return false
     if (filter === 'pending') return !d.is_done
     if (filter === 'done') return d.is_done
     return true
@@ -260,6 +264,7 @@ export default function DeadlinesPage() {
 
   return (
     <>
+      <SkeletonStyles />
       <header style={{
         minHeight: '48px', borderBottom: '2px solid #1C1208',
         display: 'flex', alignItems: 'center', justifyContent: 'space-between',
@@ -451,7 +456,7 @@ export default function DeadlinesPage() {
 
         {/* Deadline list */}
         {loading ? (
-          <div style={{ fontSize: '11px', color: '#8A6A4A' }}>LOADING...</div>
+          <SkeletonList count={4} />
         ) : filtered.length === 0 ? (
           <div style={{ border: '1.5px solid #1C1208', background: '#FDFAF5', padding: '40px', textAlign: 'center' }}>
             <div style={{ fontSize: '13px', fontWeight: 700, color: '#1C1208', marginBottom: '6px' }}>

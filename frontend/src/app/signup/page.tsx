@@ -63,7 +63,7 @@ export default function SignupPage() {
     if (!form.roll_number.trim()) { setError('Roll number is required'); return }
     if (!form.department) { setError('Department is required'); return }
     if (!form.year) { setError('Year is required'); return }
-    if (!form.section.trim()) { setError('Section is required'); return }
+    if (!form.section) { setError('Section is required'); return }
 
     setLoading(true)
     setError('')
@@ -231,7 +231,7 @@ export default function SignupPage() {
                     type="text"
                     value={form.full_name}
                     onChange={e => update('full_name', e.target.value)}
-                    placeholder="Neeharika Reddy"
+                    placeholder="Enter your full name"
                     style={inputStyle}
                   />
                 </div>
@@ -242,7 +242,7 @@ export default function SignupPage() {
                     type="email"
                     value={form.email}
                     onChange={e => update('email', e.target.value)}
-                    placeholder="you@cbit.ac.in"
+                    placeholder="Enter your email address"
                     style={inputStyle}
                   />
                 </div>
@@ -254,7 +254,7 @@ export default function SignupPage() {
                       type="password"
                       value={form.password}
                       onChange={e => update('password', e.target.value)}
-                      placeholder="min 8 chars"
+                      placeholder="Create a password"
                       style={inputStyle}
                     />
                   </div>
@@ -264,7 +264,7 @@ export default function SignupPage() {
                       type="password"
                       value={form.confirm_password}
                       onChange={e => update('confirm_password', e.target.value)}
-                      placeholder="repeat"
+                      placeholder="Re-enter password"
                       style={inputStyle}
                     />
                   </div>
@@ -359,16 +359,22 @@ export default function SignupPage() {
                   </div>
                 </div>
 
+                {/* Section — numeric dropdown */}
                 <div>
                   <label style={labelStyle}>SECTION</label>
-                  <input
-                    type="text"
+                  <select
                     value={form.section}
-                    onChange={e => update('section', e.target.value.toUpperCase())}
-                    placeholder="A"
-                    maxLength={2}
-                    style={inputStyle}
-                  />
+                    onChange={e => update('section', e.target.value)}
+                    style={{ ...inputStyle, cursor: 'pointer' }}
+                  >
+                    <option value="">Select</option>
+                    <option value="1">Section 1</option>
+                    <option value="2">Section 2</option>
+                    <option value="3">Section 3</option>
+                    <option value="4">Section 4</option>
+                    <option value="5">Section 5</option>
+                    <option value="6">Section 6</option>
+                  </select>
                 </div>
 
                 {error && (
