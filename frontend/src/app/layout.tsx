@@ -2,7 +2,7 @@ import type { Metadata } from 'next'
 import './globals.css'
 
 export const metadata: Metadata = {
-  title: 'SETHU — CBIT Campus Management',
+  title: 'SETHU - Campus Management',
   description: 'Smart Education and Task Hub for Unified Campus Management',
 }
 
