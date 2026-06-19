@@ -46,6 +46,23 @@ export default function LoginPage() {
       }
     }
 
+    // ── Rate limit check before attempting sign-in ──────────────
+    try {
+      const limitRes = await fetch('/api/check-login-attempt', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: resolvedEmail }),
+      })
+      const limitData = await limitRes.json()
+      if (limitData.limited) {
+        setError('Too many login attempts for this account. Please wait 10 minutes and try again.')
+        setLoading(false)
+        return
+      }
+    } catch {
+      // If the rate-limit check itself fails, don't block login — fail open
+    }
+
     const { error } = await supabase.auth.signInWithPassword({
       email: resolvedEmail,
       password,
@@ -189,6 +206,12 @@ export default function LoginPage() {
           No account yet?{' '}
           <a href="/signup" style={{ color: '#D94F00', textDecoration: 'none', fontWeight: 700 }}>
             CREATE ACCOUNT
+          </a>
+        </div>
+
+        <div style={{ marginTop: '12px', fontSize: '10px', color: '#C8A878', textAlign: 'center' }}>
+          <a href="/legal" style={{ color: '#C8A878', textDecoration: 'none' }}>
+            Terms of Service · Privacy Policy
           </a>
         </div>
 

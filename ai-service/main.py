@@ -28,14 +28,21 @@ VISION_MODEL = "pixtral-12b-2409"
 
 app = FastAPI(title="SETHU AI Service")
 
+# ============================================================
+# Replace your existing CORS middleware block in ai_service/main.py
+# with this — locks down allowed origins instead of "*"
+# ============================================================
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=[
+        "https://sethu-pied.vercel.app",
+        "http://localhost:3000",
+    ],
     allow_credentials=False,
-    allow_methods=["*"],
+    allow_methods=["GET", "POST"],
     allow_headers=["*"],
 )
-
 
 # ── Request models ──────────────────────────────────────────────
 

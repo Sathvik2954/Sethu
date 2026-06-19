@@ -436,6 +436,13 @@ export default function SignupPage() {
           </a>
         </div>
 
+        <div style={{ marginTop: '12px', fontSize: '10px', color: '#C8A878', textAlign: 'center' }}>
+          By creating an account you agree to our{' '}
+          <a href="/legal" style={{ color: '#C8A878', textDecoration: 'underline' }}>
+            Terms of Service and Privacy Policy
+          </a>
+        </div>
+
       </div>
     </main>
   )

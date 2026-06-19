@@ -186,7 +186,7 @@ export async function POST(req: Request) {
       reqRows.push(['FEE TYPE', feeName])
       if (request.fee_amount) reqRows.push(['AMOUNT PAID', `₹${request.fee_amount}`])
     } else if (request.request_type === 'event_permission') {
-      reqRows.push(['EVENT DATE', request.event_date])
+      reqRows.push(['EVENT DATE', request.event_end_date ? `${request.event_date} to ${request.event_end_date}` : request.event_date])
       reqRows.push(['SUBJECT', request.event_subject])
       reqRows.push(['DETAILS', request.event_content])
     } else if (request.request_type === 'complaint') {

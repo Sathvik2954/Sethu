@@ -121,7 +121,6 @@ export default function HomePage() {
         justifyContent: 'space-between', padding: '0 clamp(16px, 5vw, 48px)'
       }}>
         <span style={{ fontSize: '10px', color: '#8A6A4A', letterSpacing: '1px' }}>SETHU — CBIT · 2025</span>
-        <span style={{ fontSize: '10px', color: '#8A6A4A', letterSpacing: '1px' }}>AI &amp; ML DEPT</span>
       </footer>
 
       <style jsx>{`

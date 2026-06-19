@@ -268,6 +268,16 @@ export default function Sidebar({ fullName, department, year, role = 'student', 
           >
             SIGN OUT
           </button>
+          <Link
+            href="/legal"
+            className="sethu-nav-label"
+            style={{
+              display: 'block', textAlign: 'center', marginTop: '10px',
+              fontSize: '8px', color: '#4A3020', textDecoration: 'none', letterSpacing: '1px',
+            }}
+          >
+            Terms &amp; Privacy
+          </Link>
         </div>
 
       </aside>

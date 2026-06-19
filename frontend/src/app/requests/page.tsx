@@ -15,6 +15,7 @@ type Request = {
   admin_notes: string | null
   admin_set_date: string | null
   event_date: string | null
+  event_end_date: string | null
   event_subject: string | null
   event_content: string | null
   signature_confirm: boolean | null
@@ -36,7 +37,7 @@ type Request = {
 }
 
 type FormState = {
-  event_date: string; event_subject: string; event_content: string; signature_confirm: boolean
+  event_date: string; event_end_date: string; event_subject: string; event_content: string; signature_confirm: boolean
   problem_description: string
   gate_pass_date: string; gate_pass_reason: string; gate_pass_return_time: string
   suggestion_text: string
@@ -70,7 +71,7 @@ const TYPE_LABELS: Record<RequestType, string> = {
 
 function emptyForm(): FormState {
   return {
-    event_date: '', event_subject: '', event_content: '', signature_confirm: false,
+    event_date: '', event_end_date: '', event_subject: '', event_content: '', signature_confirm: false,
     problem_description: '',
     gate_pass_date: '', gate_pass_reason: '', gate_pass_return_time: '',
     suggestion_text: '',
@@ -121,7 +122,7 @@ function RequestCard({ r }: { r: Request }) {
       {open && (
         <div style={{ borderTop: '1px solid #E0D0B8', padding: '16px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
           {r.request_type === 'event_permission' && (<>
-            <Row label="Date" value={r.event_date ?? '—'} />
+            <Row label="Date" value={r.event_end_date ? `${r.event_date} to ${r.event_end_date}` : (r.event_date ?? '—')} />
             <Row label="Subject" value={r.event_subject ?? '—'} />
             <Row label="Content" value={r.event_content ?? '—'} />
             <Row label="Signature" value={r.signature_confirm ? 'Confirmed' : 'Not confirmed'} />
@@ -338,7 +339,7 @@ export default function RequestsPage() {
       target_dept: userDept,
     }
 
-    if (activeForm === 'event_permission') Object.assign(payload, { event_date: form.event_date, event_subject: form.event_subject, event_content: form.event_content, signature_confirm: form.signature_confirm })
+    if (activeForm === 'event_permission') Object.assign(payload, { event_date: form.event_date, event_end_date: form.event_end_date || null, event_subject: form.event_subject, event_content: form.event_content, signature_confirm: form.signature_confirm })
     else if (activeForm === 'complaint') payload.problem_description = form.problem_description
     else if (activeForm === 'gate_pass') Object.assign(payload, { gate_pass_date: form.gate_pass_date, gate_pass_reason: form.gate_pass_reason, gate_pass_return_time: form.gate_pass_return_time })
     else if (activeForm === 'suggestion') payload.suggestion_text = form.suggestion_text
@@ -386,9 +387,16 @@ export default function RequestsPage() {
             <div style={{ padding: '24px 20px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
 
               {activeForm === 'event_permission' && (<>
-                <div>
-                  <label style={labelStyle}>DATE OF EVENT</label>
-                  <input type="date" value={form.event_date} onChange={e => upd('event_date', e.target.value)} style={inputStyle} />
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px,1fr))', gap: '12px' }}>
+                  <div>
+                    <label style={labelStyle}>START DATE</label>
+                    <input type="date" value={form.event_date} onChange={e => upd('event_date', e.target.value)} style={inputStyle} />
+                  </div>
+                  <div>
+                    <label style={labelStyle}>END DATE (OPTIONAL)</label>
+                    <input type="date" value={form.event_end_date} min={form.event_date || undefined} onChange={e => upd('event_end_date', e.target.value)} style={inputStyle} />
+                    <div style={{ fontSize: '9px', color: '#8A6A4A', marginTop: '4px' }}>Leave blank for a single-day event</div>
+                  </div>
                 </div>
                 <div>
                   <label style={labelStyle}>SUBJECT</label>

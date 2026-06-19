@@ -3,6 +3,7 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import AccountsTab from '@/components/AccountsTab'
+import AuditLogTab from '@/components/AuditLogTab'
 
 // ── Types ──────────────────────────────────────────────────────
 type UserProfile = {
@@ -149,7 +150,7 @@ function TextArea({ label, value, onChange, rows = 3, placeholder = '' }: {
 // ── Main component ─────────────────────────────────────────────
 export default function DashboardTabs({ profile, userId, overviewContent, isAdmin = false }: Props) {
   const supabase = createClient()
-  const [tab, setTab] = useState<'overview' | 'profile' | 'accounts'>('overview')
+  const [tab, setTab] = useState<'overview' | 'profile' | 'accounts' | 'audit'>('overview')
 
   // ── Personal info ──────────────────────────────────────────
   const [personal, setPersonal] = useState({
@@ -339,6 +340,9 @@ export default function DashboardTabs({ profile, userId, overviewContent, isAdmi
         {isAdmin && (
           <button type="button" onClick={() => setTab('accounts')} style={tabStyle(tab === 'accounts')}>ACCOUNTS</button>
         )}
+        {isAdmin && (
+          <button type="button" onClick={() => setTab('audit')} style={tabStyle(tab === 'audit')}>AUDIT LOG</button>
+        )}
         <button type="button" onClick={openBell} style={{
           position: 'relative', background: 'transparent', border: 'none',
           padding: '0 16px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
@@ -468,6 +472,13 @@ export default function DashboardTabs({ profile, userId, overviewContent, isAdmi
       {tab === 'accounts' && isAdmin && (
         <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
           <AccountsTab />
+        </div>
+      )}
+
+      {/* Audit Log (admin only) */}
+      {tab === 'audit' && isAdmin && (
+        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+          <AuditLogTab />
         </div>
       )}
 

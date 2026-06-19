@@ -1,4 +1,20 @@
+'use client'
+
+import { useRouter } from 'next/navigation'
+
 export default function LegalPage() {
+  const router = useRouter()
+
+  function goBack() {
+    // Use browser history so this returns to wherever the person came from
+    // (dashboard sidebar, login footer, signup footer) instead of always
+    // landing on the public marketing page.
+    if (window.history.length > 1) {
+      router.back()
+    } else {
+      router.push('/login')
+    }
+  }
 
   return (
     <main style={{
@@ -11,9 +27,13 @@ export default function LegalPage() {
 
         {/* Header */}
         <div style={{ marginBottom: '48px' }}>
-          <a href="/" style={{ fontSize: '10px', fontWeight: 700, letterSpacing: '2px', color: '#8A6A4A', textDecoration: 'none' }}>
+          <button onClick={goBack} style={{
+            fontSize: '10px', fontWeight: 700, letterSpacing: '2px', color: '#8A6A4A',
+            textDecoration: 'none', background: 'transparent', border: 'none',
+            cursor: 'pointer', fontFamily: 'inherit', padding: 0,
+          }}>
             ← BACK TO SETHU
-          </a>
+          </button>
           <div style={{ marginTop: '24px' }}>
             <div style={{ fontSize: '28px', fontWeight: 700, color: '#1C1208', letterSpacing: '3px', lineHeight: 1 }}>SETHU</div>
             <div style={{ width: '40px', height: '3px', background: '#D94F00', margin: '10px 0' }} />

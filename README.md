@@ -7,7 +7,7 @@ A full-stack campus management platform built for Chaitanya Bharathi Institute o
 ## Live Demo
 
 **Application:** https://sethu-pied.vercel.app  
-**AI Service:** Deployed on Render — handles timetable PDF parsing (RapidOCR + Mistral) and AI study planning (Mistral)
+**AI Service:** Deployed on Render — handles document parsing and AI-assisted study planning
 
 ---
 
@@ -20,122 +20,64 @@ A full-stack campus management platform built for Chaitanya Bharathi Institute o
 | Authentication  | Supabase Auth — email/password, PKCE password reset     |
 | Storage         | Supabase Storage                                        |
 | AI Microservice | Python FastAPI deployed on Render                       |
-| OCR             | RapidOCR (onnxruntime) for timetable PDF extraction     |
-| Language Model  | Mistral API — timetable parsing and study planning      |
+| OCR             | RapidOCR for scanned document extraction                |
+| Language Model  | Mistral API — document parsing and study planning       |
 | PDF Generation  | pdf-lib — auto-generates approval documents server-side |
+| Scheduled Jobs  | Supabase pg_cron for recurring background tasks         |
 | 3D Landing Page | React Three Fiber + Drei                                |
-| Hosting         | Vercel (frontend), Render (AI service) — both free tier |
+| Hosting         | Vercel (frontend), Render (AI service)                  |
 
 ---
 
 ## Overview
 
-SETHU is a role-based campus platform with four user roles — student, faculty, HOD, and admin — each with a distinct set of capabilities and access controls enforced at the database level through Row Level Security.
+SETHU is a role-based campus management platform designed around four distinct user roles — student, faculty, head of department, and administrator — each with a carefully scoped set of capabilities. Rather than relying on the frontend to enforce who can see or do what, access control is built into the database itself through Row Level Security, so every query is automatically filtered to what that user is actually permitted to access.
 
-**Students** can view their department timetable, annotate faculty-defined subjects with personal notes (difficulty, placement relevance, important topics), manage personal deadlines alongside faculty-broadcast deadlines, submit HOD and administrative requests, download auto-generated approval documents, run an AI-powered study planner, maintain a full resume-style profile, and receive department-targeted notifications.
+The platform's core idea is continuity: a student's academic life — timetable, deadlines, subjects, requests, and documents — should live in one connected system instead of being scattered across WhatsApp groups, notice boards, and individual faculty spreadsheets. Faculty and HOD accounts mirror this by giving department staff a single place to manage their section's academic calendar, communicate with students, and process requests, without needing separate tools for each task. Administrators sit above all of this with institution-wide visibility and the ability to provision and manage staff accounts directly.
 
-**Faculty and HOD** can define subjects for their department, set and manage class and exam timetables (with a PDF import option powered by RapidOCR and Mistral), send deadlines and notifications to their department (optionally filtered by year and section), and review and action student requests submitted to their department.
-
-**Admin** has all of the above plus institution-wide notification and deadline broadcasting, a full account management panel to create and manage faculty, HOD, and admin accounts without email verification, and access to all requests across all departments.
+A guiding principle throughout the platform is that information should reach the right audience automatically. Requests submitted by a student route to their own department's faculty or HOD without any manual forwarding. Notifications and deadlines broadcast by faculty are automatically scoped to the department, year, and section they're intended for. Exam reminders and last-day deadline alerts are generated and delivered on a schedule, without requiring anyone to remember to send them.
 
 ---
 
-## Features
+## Who Uses What
 
-### Authentication and Accounts
+**Students** get a single dashboard for everything academic: a live view of their department's class timetable and exam schedule, the official academic almanac, faculty-defined subjects they can annotate with their own notes on difficulty and exam relevance, a combined view of personal and faculty-issued deadlines, and an AI-assisted study planner that recommends what to focus on based on the subjects they choose to analyse and the free time they actually have that day. Students can also submit a range of formal requests — from event permissions to bonafide certificates — and track their status until an officially generated document is ready to download. A full resume-style profile section lets students maintain their education, experience, and project history in one place, and a companion job recommender is one click away from the sidebar.
 
-- Email and password signup with a two-step form (account details, then student academic details)
-- Password strength meter with real-time validation
-- PKCE-based password reset flow via email
-- Staff accounts (faculty, HOD, admin) are created directly by admin with a temporary password — no email verification required
-- Role-based redirect and access control enforced at both the layout and database level
+**Faculty and HOD accounts** are built around managing a department's day-to-day academic operations. They define the subjects offered each year, set and maintain class and exam timetables (with the option to import an existing timetable PDF and have it parsed automatically rather than re-entering it by hand), record the academic almanac, and communicate with students through targeted deadlines and notifications. When students submit requests, faculty and HOD review and act on them through a dedicated approvals queue — and because routing is department-aware, faculty only ever see requests relevant to their own department, never the institution at large.
+
+**Administrators** have the broadest view of the system. In addition to everything faculty and HOD can do for their own scope, admins can provision new faculty, HOD, and admin accounts directly — without requiring those accounts to go through email verification — and can broadcast notifications at the institution level rather than being limited to a single department. A dedicated audit log gives admins visibility into every sensitive action taken across the platform, from account creation to request decisions, so there's always a record of who did what and when.
+
+---
+
+## Feature Highlights
+
+### Authentication & Account Management
+
+A two-step signup flow collects account credentials first and academic details second, with a real-time password strength indicator guiding users toward a secure password. Password resets use the PKCE flow for proper security on the redirect. Staff accounts skip the usual email verification step since they're provisioned directly by an administrator, and login attempts are rate-limited at the database level to guard against brute-force attempts.
 
 ### Dashboard
 
-- Role-aware KPI cards — students see active deadlines, open requests, and subject count; staff see pending approvals and department stats
-- Contextual setup checklist for new students
-- MY PROFILE tab with a full resume-style profile builder: personal information, professional summary, education, experience, technical skills, projects, certifications, and leadership and achievements — stored as JSONB in a separate profiles table
-- ACCOUNTS tab visible to admin only — create faculty, HOD, and admin accounts; view all staff with role filters; delete accounts
-- Notification bell in the tab bar with an unread count badge and a slide-in drawer showing the latest 20 notifications with read receipts
+The dashboard adapts its content based on role — students see KPIs around deadlines, requests, and subjects, while staff see department-level stats and pending approvals. A resume-style profile builder lives in its own tab, letting users maintain personal information, a professional summary, education, work experience, technical skills, projects, certifications, and achievements. Admins get two additional tabs: one for managing staff accounts, and one for browsing the searchable audit log. A notification bell with an unread-count badge gives quick access to recent updates without leaving the page.
 
-### Timetable
+### Timetable, Almanac & Exams
 
-- Faculty and HOD can add class slots manually (day, time slot, subject, faculty, room) per department, year, and section
-- PDF import panel for faculty: upload a timetable PDF, parse it via the Render AI service (RapidOCR extracts coordinates and text, Mistral structures the data), review and edit parsed slots in a table before saving
-- Separate exam timetable tab: faculty add exam entries (subject, date, start and end time, venue)
-- Students see a read-only weekly grid for class timetable and a chronological card list for exams, with today and overdue highlights
+Faculty and HOD manage three interconnected academic calendars in one place: the weekly class timetable, the exam schedule, and the official academic almanac (course registration windows, class work periods, test dates, and holidays). All three support a PDF import workflow — upload an existing document and the AI service extracts and structures the data automatically, with a review step before anything is saved. Students see clean, read-only views: a weekly grid for classes, a chronological list for exams with live "today" and "overdue" indicators, and a table view of the almanac.
 
-### Subjects and AI Planner
+### Subjects & AI-Assisted Planning
 
-- Faculty define subjects per department and year (subject code, name, credits, type: theory, lab, or elective)
-- Students annotate each subject with difficulty level, placement importance flag, higher studies flag, important topics, placement-specific topics, and personal notes — stored per student per subject
-- AI Planner reads all faculty-defined subjects, enriches them with the student's annotations, estimates free hours from today's timetable, and calls the Mistral endpoint on the AI service
-- Returns a ranked priority list with a level (critical, high, mid, low), score, and reason per subject, plus a study recommendation paragraph
-- Falls back to rule-based scoring if the Mistral API is unavailable
+Faculty define the subjects offered for their department and year. Students layer their own context on top — marking difficulty, flagging subjects as placement- or higher-study-relevant, and noting important topics — which then feeds directly into an AI study planner. Students choose which subjects to include in a given planning session, the system estimates their free hours for the day from their actual timetable, and the planner returns a ranked, reasoned priority list along with a concrete study recommendation.
 
-### Deadlines
+### Deadlines & Notifications
 
-- Students create personal deadlines with title, due datetime, priority (low, medium, high), and description
-- Faculty and HOD broadcast deadlines to their department with optional section and year filters
-- Combined view shows personal and faculty-sent deadlines together with smart due-date labels (overdue, due today, due in N days)
-- Personal deadlines can be marked done or deleted; faculty deadlines are read-only for students
+Students track their own personal deadlines alongside anything broadcast by their faculty, with smart due-date labelling so it's immediately clear what's overdue or due today. The system automatically reminds students on the final day of a faculty-issued deadline, and similarly sends exam-approaching reminders a week, three days, and one day out. Notifications support file attachments and priority levels, and can be dismissed individually or cleared in bulk — separate from simply being marked as read.
 
-### Notifications
+### Requests & Approvals
 
-- Faculty and HOD send notifications to their department with optional section and year targeting
-- Admin sends institution-wide or to a specific department
-- Optional file attachment stored in Supabase Storage
-- Priority: normal or urgent (urgent displays a distinct red border and badge)
-- Read receipts tracked per user; unread count reflected in the dashboard bell icon
+SETHU handles seven distinct request types split across two routing paths: HOD-routed requests (event permissions, complaints, gate passes, suggestions) go exclusively to faculty and HOD, while administrative requests (bonafide certificates, lost ID cards, fee receipts) route to admin. On approval, the platform automatically generates a branded, properly formatted PDF document and makes it available for download — no manual document creation required on either side. Sensitive uploads like payment screenshots are handled through short-lived signed URLs rather than public links, and completed requests are automatically cleared from view after a set retention period.
 
-### Requests and Approvals
+### Security
 
-HOD-routed requests: Event and Placement Permission, Complaint, Gate Pass, Suggestion  
-Admin-routed requests: Bonafide Certificate, Lost ID Card, Fee Receipt
-
-- Requests are department-routed — a CSE student's request goes to the CSE faculty or HOD
-- Administrative requests (bonafide, lost ID, fees) require a payment screenshot upload
-- Faculty and admin review requests in an approvals queue with status filters and section filters
-- On approval, the system auto-generates a branded A4 PDF (SETHU letterhead, student details, request details, admin message, declaration) using pdf-lib, uploads it to Supabase Storage, and saves the URL to the request record
-- Students see a download button on their request card and in the Documents page
-- ID card replacement approvals include a collection date/time and location notice for the student
-
-### Profile
-
-Full resume-style profile with eight sections, each collapsible and independently editable:
-Personal Information, Professional Summary, Education, Experience, Technical Skills, Projects, Certifications, and Leadership and Achievements. Profile photo upload to Supabase Storage. Personal information saves to the users table; resume sections upsert to a separate profiles table.
-
-### Jobs
-
-Sidebar link to a companion job recommender application (https://job-recommender-sigma.vercel.app) which opens in a new tab.
-
----
-
-## Database
-
-Nine tables in the public schema, all with Row Level Security enabled:
-
-`users` — all platform users extending Supabase auth, with role, department, year, section, and profile fields  
-`profiles` — resume-style profile data using JSONB arrays for education, experience, projects, certifications, and achievements  
-`notifications` — department-targeted notifications with sender, targeting fields, priority, and optional attachment  
-`notification_reads` — read receipts mapping users to notifications  
-`timetable_slots` — class and exam slots per department, year, and section  
-`subjects` — faculty-defined subjects per department and year  
-`student_subject_notes` — per-student annotations on subjects  
-`deadlines` — personal student deadlines and faculty-broadcast deadlines with source and targeting fields  
-`requests` — all seven request types with type-specific columns, status, admin notes, and generated PDF URL
-
-Four storage buckets: `avatars` (public, profile photos), `documents` (public, generated PDFs), `notifications` (public, notification attachments), `request-attachments` (private, payment screenshots).
-
----
-
-## AI Service
-
-The FastAPI service exposes two endpoints and is deployed separately on Render.
-
-`POST /parse-timetable` — accepts a PDF file, uses pdfplumber and RapidOCR for coordinate-based text extraction, then calls Mistral to parse the extracted text into structured slot objects (day, start time, end time, subject code, subject name, slot type, room).
-
-`POST /prioritize` — accepts a list of subjects with metadata (difficulty, exam weightage, credits, exam date) and the student's free hours for today, calls Mistral to produce a ranked priority list with scores, levels, and reasons, and returns a study recommendation paragraph.
+Every table in the system enforces Row Level Security, meaning access control isn't just a frontend convenience — it's structurally impossible to query data outside your permitted scope, even if the API were called directly. Sensitive administrative actions are rate-limited and logged to an audit trail visible only to admins, file access for private content uses time-limited signed URLs, and the AI service restricts which origins are allowed to call it.
 
 ---
 
@@ -143,10 +85,7 @@ The FastAPI service exposes two endpoints and is deployed separately on Render.
 
 ### Prerequisites
 
-- Node.js 18 or later
-- Python 3.10 or later
-- Supabase project
-- Mistral API key
+Node.js 18+, Python 3.10+, a Supabase project, and a Mistral API key.
 
 ### Environment Variables
 
@@ -165,49 +104,20 @@ AI Service (`ai_service/.env`):
 MISTRAL_API_KEY=
 ```
 
-### Frontend
+### Running locally
 
 ```bash
-cd frontend
-npm install
-npm run dev
-```
-
-### AI Service
-
-```bash
-cd ai_service
-pip install -r requirements.txt
-uvicorn main:app --reload
+cd frontend && npm install && npm run dev
+cd ai_service && pip install -r requirements.txt && uvicorn main:app --reload
 ```
 
 ### Database
 
-Run the following SQL files in order in the Supabase SQL Editor:
-
-1. `schema-part1.sql` — drops old tables cleanly
-2. `schema-part2.sql` — creates all tables with RLS policies
-3. `fix-role-constraint.sql` — adds hod to the role check constraint
-4. `fix-fk-public.sql` — points the requests foreign key to public.users
-5. `fix-rls-final.sql` — allows faculty and admin to read requests
-6. `documents-bucket.sql` — creates the documents storage bucket
+Schema and migration files are provided separately and should be applied in order through the Supabase SQL Editor.
 
 ### Supabase Auth Configuration
 
-In Supabase → Authentication → URL Configuration, set the following redirect URLs:
-
-```
-https://sethu-pied.vercel.app/auth/callback
-https://sethu-pied.vercel.app/reset-password
-http://localhost:3000/auth/callback
-http://localhost:3000/reset-password
-```
-
----
-
-## Security
-
-All database tables use Row Level Security. Students access only their own records. Faculty and HOD access records scoped to their department. Admin has unrestricted access. Staff account creation uses the Supabase service role key exclusively server-side and is never exposed to the client. File uploads are scoped to user ID folders in storage. Password reset uses the PKCE flow with a server-side code exchange.
+In Supabase → Authentication → URL Configuration, register your deployment and localhost URLs for the `/auth/callback` and `/reset-password` routes.
 
 ---
 

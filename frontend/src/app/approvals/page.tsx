@@ -17,6 +17,7 @@ type Request = {
   admin_set_date: string | null
   // HOD fields
   event_date: string | null
+  event_end_date: string | null
   event_subject: string | null
   event_content: string | null
   signature_confirm: boolean | null
@@ -76,7 +77,7 @@ function RequestDetail({ r }: { r: Request }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column' }}>
       {r.request_type === 'event_permission' && (<>
-        <Row label="Event Date" value={r.event_date} />
+        <Row label="Event Date" value={r.event_end_date ? `${r.event_date} to ${r.event_end_date}` : r.event_date} />
         <Row label="Subject" value={r.event_subject} />
         <Row label="Content" value={r.event_content} />
         <Row label="Signature" value={r.signature_confirm ? 'Confirmed by student' : 'Not confirmed'} />
@@ -197,6 +198,18 @@ export default function ApprovalsPage() {
       .eq('id', r.id)
 
     if (dbErr) { setError('Update failed: ' + dbErr.message); setActing(false); return }
+
+    // Audit log this status change
+    fetch('/api/log-action', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        action: `request_${newStatus}`,
+        target_type: 'request',
+        target_id: r.id,
+        details: { request_type: r.request_type, student_name: r.student?.full_name ?? null, previous_status: r.status },
+      }),
+    }).catch(() => {}) // non-blocking — don't fail the approval if logging fails
 
     // Auto-generate PDF when approved
     if (newStatus === 'approved') {
