@@ -3,6 +3,13 @@
 import { useState, useEffect, useCallback } from 'react'
 import { createClient } from '@/lib/supabase/client'
 
+type Subject = {
+  id: string
+  subject_code: string | null
+  subject_name: string
+  subject_type: string
+}
+
 type Priority = {
   code: string
   name: string
@@ -28,77 +35,95 @@ const LEVEL_COLOR: Record<string, { bg: string; fg: string }> = {
 
 export default function PlannerPage() {
   const supabase = createClient()
+  const [subjects, setSubjects] = useState<Subject[]>([])
+  const [selected, setSelected] = useState<Set<string>>(new Set())
+  const [loadingSubjects, setLoadingSubjects] = useState(true)
   const [result, setResult] = useState<PlannerResult | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [freeHours, setFreeHours] = useState(2)
-  const [subjectCount, setSubjectCount] = useState(0)
   const [lastRun, setLastRun] = useState<string | null>(null)
 
   const today = new Date().toLocaleDateString('en-IN', {
     weekday: 'short', day: '2-digit', month: 'short', year: 'numeric',
   }).toUpperCase()
 
-  // Get today's free hours from timetable
-  const loadFreeHours = useCallback(async () => {
+  // Load subjects + auto-estimate free hours
+  const loadSubjects = useCallback(async () => {
+    setLoadingSubjects(true)
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return
 
     const { data: profile } = await supabase
       .from('users').select('department, year, section').eq('id', user.id).single()
 
-    if (!profile?.department || !profile?.year || !profile?.section) return
-
-    const jsDay = new Date().getDay()
-    const dayMap = ['SUN','MON','TUE','WED','THU','FRI','SAT']
-    const todayName = dayMap[jsDay]
-
-    if (todayName === 'SUN') { setFreeHours(8); return }
-
-    // Count non-class slots today
-    const { data: slots } = await supabase
-      .from('timetable_slots')
-      .select('slot_label, day')
-      .eq('department', profile.department)
-      .eq('year', profile.year)
-      .eq('section', profile.section)
-      .eq('timetable_type', 'class')
+    const { data: subs } = await supabase
+      .from('subjects')
+      .select('id, subject_code, subject_name, subject_type')
+      .eq('department', profile?.department ?? '')
+      .eq('year', profile?.year ?? 0)
       .eq('is_active', true)
-      .eq('day', todayName)
+      .order('subject_code')
 
-    // Estimate: 8 working hours minus class hours (assume each slot ~1hr)
-    const classHours = slots?.length ?? 0
-    setFreeHours(Math.max(1, 8 - classHours))
+    setSubjects((subs as Subject[]) ?? [])
+    // Select all by default
+    setSelected(new Set((subs ?? []).map((s: { id: string }) => s.id)))
+    setLoadingSubjects(false)
+
+    // Auto-estimate free hours from timetable
+    if (profile?.department && profile?.year && profile?.section) {
+      const jsDay = new Date().getDay()
+      const dayMap = ['SUN','MON','TUE','WED','THU','FRI','SAT']
+      const todayName = dayMap[jsDay]
+
+      if (todayName === 'SUN') {
+        setFreeHours(8)
+      } else {
+        const { data: slots } = await supabase
+          .from('timetable_slots')
+          .select('slot_label')
+          .eq('department', profile.department)
+          .eq('year', profile.year)
+          .eq('section', profile.section)
+          .eq('timetable_type', 'class')
+          .eq('is_active', true)
+          .eq('day', todayName)
+
+        const classHours = slots?.length ?? 0
+        setFreeHours(Math.min(12, Math.max(0.5, 8 - classHours)))
+      }
+    }
   }, [supabase])
 
-  useEffect(() => { loadFreeHours() }, [loadFreeHours])
+  useEffect(() => { loadSubjects() }, [loadSubjects])
+
+  function toggleSubject(id: string) {
+    setSelected(prev => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
+
+  function selectAll() {
+    setSelected(new Set(subjects.map(s => s.id)))
+  }
+
+  function selectNone() {
+    setSelected(new Set())
+  }
 
   async function runPlanner() {
+    if (selected.size === 0) { setError('Select at least one subject to analyse'); return }
     setLoading(true); setError(''); setResult(null)
 
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) { setError('Not signed in'); setLoading(false); return }
 
-    const { data: profile } = await supabase
-      .from('users').select('department, year').eq('id', user.id).single()
+    const chosenSubjects = subjects.filter(s => selected.has(s.id))
+    const subjectIds = chosenSubjects.map(s => s.id)
 
-    // Fetch subjects
-    const { data: subjects } = await supabase
-      .from('subjects')
-      .select('id, subject_code, subject_name, credits, subject_type')
-      .eq('department', profile?.department ?? '')
-      .eq('year', profile?.year ?? 0)
-      .eq('is_active', true)
-
-    if (!subjects || subjects.length === 0) {
-      setError('No subjects found. Your faculty needs to add subjects first.')
-      setLoading(false); return
-    }
-
-    setSubjectCount(subjects.length)
-
-    // Fetch student notes for each subject
-    const subjectIds = subjects.map((s: { id: string }) => s.id)
     const { data: notes } = await supabase
       .from('student_subject_notes')
       .select('*')
@@ -109,16 +134,9 @@ export default function PlannerPage() {
       subject_id: string
       difficulty_level: string | null
       important_for_placements: boolean
-      placement_topics: string[] | null
     }) => [n.subject_id, n]))
 
-    // Build payload for AI service
-    const subjectPayload = subjects.map((s: {
-      id: string
-      subject_code: string | null
-      subject_name: string
-      credits: number | null
-    }) => {
+    const subjectPayload = chosenSubjects.map(s => {
       const note = noteMap[s.id]
       const difficulty = note?.difficulty_level === 'easy' ? 2 : note?.difficulty_level === 'hard' ? 5 : 3
       const placement = note?.important_for_placements ? 80 : 50
@@ -126,10 +144,10 @@ export default function PlannerPage() {
         code: s.subject_code ?? s.subject_name.slice(0, 6).toUpperCase(),
         name: s.subject_name,
         difficulty,
-        coverage_pct: 0, // students don't track this yet
+        coverage_pct: 0,
         exam_weightage: placement,
         exam_date: null,
-        credits: s.credits ?? 3,
+        credits: 3,
       }
     })
 
@@ -137,7 +155,7 @@ export default function PlannerPage() {
       const res = await fetch(`${process.env.NEXT_PUBLIC_AI_SERVICE_URL}/prioritize`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ subjects: subjectPayload, free_hours_today: freeHours }),
+        body: JSON.stringify({ subjects: subjectPayload, free_hours_today: Math.min(12, freeHours) }),
       })
 
       if (!res.ok) {
@@ -154,6 +172,10 @@ export default function PlannerPage() {
     }
 
     setLoading(false)
+  }
+
+  const lbl: React.CSSProperties = {
+    fontSize: '9px', fontWeight: 700, letterSpacing: '1.5px', color: '#6A4A2A', marginBottom: '5px', display: 'block',
   }
 
   return (
@@ -178,12 +200,70 @@ export default function PlannerPage() {
         display: 'flex', flexDirection: 'column', gap: '20px',
       }}>
 
+        {/* Subject selector */}
+        <div style={{ border: '1.5px solid #1C1208', background: '#FDFAF5' }}>
+          <div style={{
+            display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+            padding: '12px 18px', borderBottom: '1.5px solid #1C1208',
+          }}>
+            <span style={{ fontSize: '9px', fontWeight: 700, letterSpacing: '2px', color: '#8A6A4A' }}>
+              SELECT SUBJECTS TO ANALYSE
+            </span>
+            <div style={{ display: 'flex', gap: '8px' }}>
+              <button type="button" onClick={selectAll} style={{
+                background: 'transparent', border: '1px solid #C8A878', color: '#8A6A4A',
+                padding: '4px 10px', fontSize: '8px', fontWeight: 700, letterSpacing: '1px',
+                cursor: 'pointer', fontFamily: 'inherit',
+              }}>SELECT ALL</button>
+              <button type="button" onClick={selectNone} style={{
+                background: 'transparent', border: '1px solid #C8A878', color: '#8A6A4A',
+                padding: '4px 10px', fontSize: '8px', fontWeight: 700, letterSpacing: '1px',
+                cursor: 'pointer', fontFamily: 'inherit',
+              }}>CLEAR</button>
+            </div>
+          </div>
+
+          <div style={{ padding: '16px 18px' }}>
+            {loadingSubjects ? (
+              <div style={{ fontSize: '11px', color: '#8A6A4A' }}>Loading subjects...</div>
+            ) : subjects.length === 0 ? (
+              <div style={{ fontSize: '12px', color: '#8A6A4A' }}>
+                No subjects found. Your faculty needs to add subjects for your department first.
+              </div>
+            ) : (
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '8px' }}>
+                {subjects.map(s => (
+                  <label key={s.id} style={{
+                    display: 'flex', alignItems: 'center', gap: '10px',
+                    padding: '10px 12px', border: `1.5px solid ${selected.has(s.id) ? '#D94F00' : '#E0D0B8'}`,
+                    background: selected.has(s.id) ? '#FFF8F2' : '#F2EDE6',
+                    cursor: 'pointer',
+                  }}>
+                    <input
+                      type="checkbox"
+                      checked={selected.has(s.id)}
+                      onChange={() => toggleSubject(s.id)}
+                      style={{ accentColor: '#D94F00', width: '16px', height: '16px', flexShrink: 0 }}
+                    />
+                    <div style={{ minWidth: 0 }}>
+                      <div style={{ fontSize: '12px', fontWeight: 700, color: '#1C1208' }}>
+                        {s.subject_code ? `${s.subject_code} — ` : ''}{s.subject_name}
+                      </div>
+                      <div style={{ fontSize: '9px', color: '#8A6A4A', marginTop: '2px', textTransform: 'capitalize' }}>{s.subject_type}</div>
+                    </div>
+                  </label>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+
         {/* Control panel */}
         <div style={{ border: '1.5px solid #1C1208', background: '#FDFAF5', padding: '20px' }}>
           <div style={{ fontSize: '9px', fontWeight: 700, letterSpacing: '2px', color: '#8A6A4A', marginBottom: '14px' }}>STUDY PLANNER</div>
           <div style={{ display: 'flex', alignItems: 'flex-end', gap: '16px', flexWrap: 'wrap' }}>
             <div>
-              <label style={{ fontSize: "9px", fontWeight: 700, letterSpacing: "1.5px", color: "#6A4A2A", marginBottom: "5px", display: "block" }}>FREE HOURS TODAY</label>
+              <label style={lbl}>FREE HOURS TODAY (MAX 12)</label>
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                 <button type="button" onClick={() => setFreeHours(h => Math.max(0.5, h - 0.5))} style={{
                   width: '32px', height: '36px', background: '#F2EDE6', border: '1.5px solid #C8A878',
@@ -198,12 +278,12 @@ export default function PlannerPage() {
               <div style={{ fontSize: '9px', color: '#8A6A4A', marginTop: '4px' }}>Auto-estimated from your timetable</div>
             </div>
 
-            <button type="button" onClick={runPlanner} disabled={loading} style={{
-              background: loading ? '#8A6A4A' : '#D94F00', color: '#F2EDE6', border: 'none',
+            <button type="button" onClick={runPlanner} disabled={loading || selected.size === 0} style={{
+              background: loading || selected.size === 0 ? '#8A6A4A' : '#D94F00', color: '#F2EDE6', border: 'none',
               padding: '12px 28px', fontSize: '11px', fontWeight: 700, letterSpacing: '2px',
-              cursor: loading ? 'not-allowed' : 'pointer', fontFamily: 'inherit',
+              cursor: loading || selected.size === 0 ? 'not-allowed' : 'pointer', fontFamily: 'inherit',
             }}>
-              {loading ? 'ANALYSING...' : '▶ GENERATE PLAN'}
+              {loading ? 'ANALYSING...' : `▶ GENERATE PLAN (${selected.size} SELECTED)`}
             </button>
 
             {lastRun && (
@@ -212,8 +292,7 @@ export default function PlannerPage() {
           </div>
 
           <div style={{ marginTop: '14px', fontSize: '11px', color: '#6A4A2A', lineHeight: 1.6 }}>
-            The planner uses your <strong>faculty-defined subjects</strong> and your <strong>personal notes</strong> (difficulty, placement importance) to rank what you should study today.
-            Add notes to your subjects for better recommendations.
+            The planner analyses only the subjects you select above, using your <strong>personal notes</strong> (difficulty, placement importance) to rank what you should study today.
           </div>
         </div>
 
@@ -222,7 +301,6 @@ export default function PlannerPage() {
         {/* Result */}
         {result && (
           <>
-            {/* Recommendation */}
             <div style={{ border: '1.5px solid #D94F00', background: '#FDFAF5', padding: '20px' }}>
               <div style={{ fontSize: '9px', fontWeight: 700, letterSpacing: '2px', color: '#D94F00', marginBottom: '10px' }}>
                 TODAY'S RECOMMENDATION
@@ -238,10 +316,9 @@ export default function PlannerPage() {
               )}
             </div>
 
-            {/* Priority list */}
             <div>
               <div style={{ fontSize: '9px', fontWeight: 700, letterSpacing: '2px', color: '#8A6A4A', marginBottom: '10px' }}>
-                SUBJECT PRIORITIES — {subjectCount} SUBJECTS ANALYSED
+                SUBJECT PRIORITIES — {selected.size} SUBJECTS ANALYSED
               </div>
               {result.priorities.map((p, i) => {
                 const lc = LEVEL_COLOR[p.level] ?? LEVEL_COLOR.low
@@ -279,11 +356,11 @@ export default function PlannerPage() {
           </>
         )}
 
-        {!result && !loading && !error && (
+        {!result && !loading && !error && subjects.length > 0 && (
           <div style={{ border: '1.5px solid #1C1208', background: '#FDFAF5', padding: '40px', textAlign: 'center' }}>
             <div style={{ fontSize: '13px', fontWeight: 700, color: '#1C1208', marginBottom: '8px' }}>Ready to plan your day</div>
             <div style={{ fontSize: '11px', color: '#8A6A4A', lineHeight: 1.6, maxWidth: '400px', margin: '0 auto' }}>
-              Click GENERATE PLAN to let Mistral analyse your subjects and tell you what to focus on today based on your free hours.
+              Select the subjects you want to focus on above, then click GENERATE PLAN.
               For best results, add difficulty and important topics to your subjects first.
             </div>
           </div>

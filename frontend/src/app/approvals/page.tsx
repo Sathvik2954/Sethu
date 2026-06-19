@@ -110,6 +110,38 @@ function RequestDetail({ r }: { r: Request }) {
 }
 
 // ── Main component ─────────────────────────────────────────────
+// ── Payment screenshot — generates a signed URL on click since the
+// request-attachments bucket is private ──────────────────────────
+function PaymentScreenshotLink({ path, supabase }: { path: string; supabase: ReturnType<typeof createClient> }) {
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState('')
+
+  async function handleView() {
+    setLoading(true); setError('')
+    const { data, error: err } = await supabase.storage
+      .from('request-attachments')
+      .createSignedUrl(path, 300) // valid for 5 minutes
+
+    setLoading(false)
+    if (err || !data) { setError('Could not load screenshot: ' + (err?.message ?? 'unknown error')); return }
+    window.open(data.signedUrl, '_blank', 'noopener,noreferrer')
+  }
+
+  return (
+    <div>
+      <button type="button" onClick={handleView} disabled={loading} style={{
+        background: 'transparent', border: 'none', padding: 0,
+        fontSize: '11px', color: '#D94F00', fontWeight: 700,
+        cursor: loading ? 'not-allowed' : 'pointer', fontFamily: 'inherit',
+        textDecoration: 'underline',
+      }}>
+        {loading ? 'LOADING...' : 'VIEW SCREENSHOT ↗'}
+      </button>
+      {error && <div style={{ fontSize: '10px', color: '#D94F00', marginTop: '4px' }}>{error}</div>}
+    </div>
+  )
+}
+
 export default function ApprovalsPage() {
   const supabase = createClient()
   const [requests, setRequests] = useState<Request[]>([])
@@ -321,11 +353,7 @@ export default function ApprovalsPage() {
                       {r.payment_screenshot_url && (
                         <div>
                           <div style={{ fontSize: '9px', fontWeight: 700, color: '#8A6A4A', letterSpacing: '1px', marginBottom: '6px' }}>PAYMENT SCREENSHOT</div>
-                          <a href={r.payment_screenshot_url} target="_blank" rel="noopener noreferrer" style={{
-                            fontSize: '11px', color: '#D94F00', textDecoration: 'none', fontWeight: 700,
-                          }}>
-                            VIEW SCREENSHOT ↗
-                          </a>
+                          <PaymentScreenshotLink path={r.payment_screenshot_url} supabase={supabase} />
                         </div>
                       )}
 

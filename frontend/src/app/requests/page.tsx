@@ -247,6 +247,7 @@ export default function RequestsPage() {
   const [formError, setFormError] = useState('')
   const [success, setSuccess] = useState('')
   const [userId, setUserId] = useState<string | null>(null)
+  const [userDept, setUserDept] = useState<string | null>(null)
   const fileRef = useRef<HTMLInputElement | null>(null)
 
   useEffect(() => {
@@ -254,6 +255,8 @@ export default function RequestsPage() {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) return
       setUserId(user.id)
+      const { data: profile } = await supabase.from('users').select('department').eq('id', user.id).single()
+      setUserDept(profile?.department ?? null)
       const { data } = await supabase
         .from('requests').select('*')
         .eq('student_id', user.id)
@@ -288,8 +291,9 @@ export default function RequestsPage() {
     const path = `${uid}/payment-${Date.now()}.${ext}`
     const { error } = await supabase.storage.from('request-attachments').upload(path, paymentFile, { upsert: true })
     if (error) { setFormError('File upload failed: ' + error.message); return null }
-    const { data } = supabase.storage.from('request-attachments').getPublicUrl(path)
-    return data.publicUrl
+    // Store the storage PATH, not a public URL — bucket is private, so we
+    // generate a signed URL on-demand whenever someone needs to view it.
+    return path
   }
 
   async function handleSubmit() {
@@ -328,7 +332,11 @@ export default function RequestsPage() {
     if (formError) { setSubmitting(false); return }
 
     const section = ['event_permission','complaint','gate_pass','suggestion'].includes(activeForm!) ? 'hod' : 'admin'
-    const payload: Record<string, unknown> = { student_id: userId, section, request_type: activeForm, payment_screenshot_url: paymentUrl }
+    const payload: Record<string, unknown> = {
+      student_id: userId, section, request_type: activeForm,
+      payment_screenshot_url: paymentUrl,
+      target_dept: userDept,
+    }
 
     if (activeForm === 'event_permission') Object.assign(payload, { event_date: form.event_date, event_subject: form.event_subject, event_content: form.event_content, signature_confirm: form.signature_confirm })
     else if (activeForm === 'complaint') payload.problem_description = form.problem_description

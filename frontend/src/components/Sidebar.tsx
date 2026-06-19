@@ -137,7 +137,7 @@ export default function Sidebar({ fullName, department, year, role = 'student', 
       )}
 
       <aside className={`sethu-sidebar ${expanded ? 'sethu-sidebar-expanded' : ''}`} style={{
-        width: '200px', minWidth: '200px', background: '#1C1208',
+        width: 'clamp(64px, 16vw, 200px)', minWidth: '64px', background: '#1C1208',
         display: 'flex', flexDirection: 'column', minHeight: '100vh', flexShrink: 0,
       }}>
 
@@ -280,6 +280,14 @@ export default function Sidebar({ fullName, department, year, role = 'student', 
           background: rgba(28,18,8,0.45); z-index: 90;
         }
 
+        @media (max-width: 1024px) and (min-width: 761px) {
+          .sethu-sidebar { width: clamp(60px, 12vw, 80px) !important; }
+          .sethu-wordmark-full { display: none; }
+          .sethu-wordmark-collapsed { display: block; }
+          .sethu-nav-label { display: none; }
+          .sethu-nav-link { justify-content: center; padding: 10px 0 !important; }
+        }
+
         @media (max-width: 760px) {
           .sethu-sidebar { width: 56px !important; min-width: 56px !important; }
           .sethu-sidebar-toggle { display: flex; align-items: center; justify-content: center; }
@@ -291,7 +299,7 @@ export default function Sidebar({ fullName, department, year, role = 'student', 
 
           .sethu-sidebar-expanded {
             position: fixed; top: 0; left: 0;
-            width: 220px !important; min-width: 220px !important;
+            width: min(220px, 80vw) !important; min-width: 0 !important;
             height: 100vh; z-index: 100;
             box-shadow: 4px 0 16px rgba(0,0,0,0.3);
           }

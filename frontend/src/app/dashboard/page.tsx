@@ -27,11 +27,24 @@ export default async function DashboardPage() {
     .eq('year', profile?.year ?? 0)
     .eq('is_active', true)
 
-  const { count: deadlineCount } = await supabase
+  // Personal deadlines count
+  const { count: personalDeadlineCount } = await supabase
     .from('deadlines')
     .select('*', { count: 'exact', head: true })
-    .or(`student_id.eq.${user!.id},and(source.eq.faculty,target_dept.eq.${profile?.department ?? ''})`)
+    .eq('student_id', user!.id)
     .eq('is_done', false)
+    .gt('due_date', new Date().toISOString())
+
+  // Faculty deadline count for this student's dept
+  const { count: facultyDeadlineCount } = await supabase
+    .from('deadlines')
+    .select('*', { count: 'exact', head: true })
+    .eq('source', 'faculty')
+    .eq('target_dept', profile?.department ?? '')
+    .eq('is_done', false)
+    .gt('due_date', new Date().toISOString())
+
+  const deadlineCount = (personalDeadlineCount ?? 0) + (facultyDeadlineCount ?? 0)
 
   const { count: requestCount } = await supabase
     .from('requests')

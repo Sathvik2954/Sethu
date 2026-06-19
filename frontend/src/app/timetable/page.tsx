@@ -43,6 +43,15 @@ type ParsedSlot = {
   include: boolean
 }
 
+type ParsedExam = {
+  exam_subject: string
+  exam_date: string
+  exam_start_time: string | null
+  exam_end_time: string | null
+  exam_room: string | null
+  include: boolean
+}
+
 const DAYS = ['MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT']
 const DEPARTMENTS = ['CSE','AIML','CET','AIDS','IT','ECE','EEE','MECH','CIVIL','BIO TECH']
 
@@ -191,7 +200,7 @@ export default function TimetablePage() {
   const [me, setMe] = useState<UserInfo | null>(null)
   const [slots, setSlots] = useState<Slot[]>([])
   const [loading, setLoading] = useState(true)
-  const [activeTab, setActiveTab] = useState<'class' | 'exam'>('class')
+  const [activeTab, setActiveTab] = useState<'class' | 'exam' | 'almanac'>('class')
 
   // Faculty: target selector
   const [targetYear, setTargetYear] = useState('')
@@ -207,6 +216,15 @@ export default function TimetablePage() {
   const [importFile, setImportFile] = useState<File | null>(null)
   const [parsedSlots, setParsedSlots] = useState<ParsedSlot[]>([])
   const [importing, setImporting] = useState(false)
+
+  // Exam PDF import
+  const [showExamImport, setShowExamImport] = useState(false)
+  const [examImportFile, setExamImportFile] = useState<File | null>(null)
+  const [parsedExams, setParsedExams] = useState<ParsedExam[]>([])
+  const [examImporting, setExamImporting] = useState(false)
+  const [examImportError, setExamImportError] = useState('')
+  const [savingExamImport, setSavingExamImport] = useState(false)
+  const examImportFileRef = useRef<HTMLInputElement | null>(null)
   const [importError, setImportError] = useState('')
   const [savingImport, setSavingImport] = useState(false)
   const importFileRef = useRef<HTMLInputElement | null>(null)
@@ -308,6 +326,59 @@ export default function TimetablePage() {
     setImportFile(null)
     setShowImport(false)
     setSavingImport(false)
+    load()
+  }
+
+  // ── Exam PDF import ─────────────────────────────────────────
+  async function handleParseExam() {
+    if (!examImportFile) { setExamImportError('Choose a PDF file first'); return }
+    if (!targetYear) { setExamImportError('Set the year before parsing'); return }
+    if (!targetSection.trim()) { setExamImportError('Set the section before parsing'); return }
+    setExamImporting(true); setExamImportError(''); setParsedExams([])
+    const formData = new FormData()
+    formData.append('file', examImportFile)
+    try {
+      const res = await fetch(`${process.env.NEXT_PUBLIC_AI_SERVICE_URL}/parse-exam-timetable`, {
+        method: 'POST', body: formData,
+      })
+      const data = await res.json()
+      if (!res.ok) { setExamImportError(data.detail ?? 'Could not parse PDF'); setExamImporting(false); return }
+      const result: ParsedExam[] = (data.slots ?? []).map((s: Omit<ParsedExam, 'include'>) => ({ ...s, include: true }))
+      setParsedExams(result)
+    } catch { setExamImportError('Could not reach AI service. Is it running?') }
+    setExamImporting(false)
+  }
+
+  function updateParsedExam(i: number, field: keyof ParsedExam, value: string | boolean) {
+    setParsedExams(prev => prev.map((s, idx) => idx === i ? { ...s, [field]: value } : s))
+  }
+
+  async function handleSaveExamImport() {
+    if (!me) return
+    setSavingExamImport(true); setExamImportError('')
+    const dept = targetDept || me.department || ''
+    const included = parsedExams.filter(s => s.include)
+
+    for (const exam of included) {
+      const { error: e } = await supabase.from('timetable_slots').insert({
+        timetable_type: 'exam',
+        department: dept,
+        year: parseInt(targetYear),
+        section: targetSection,
+        exam_date: exam.exam_date,
+        exam_start_time: exam.exam_start_time || null,
+        exam_end_time: exam.exam_end_time || null,
+        exam_subject: exam.exam_subject,
+        exam_room: exam.exam_room || null,
+        created_by: me.id,
+      })
+      if (e) { setExamImportError('Save failed: ' + e.message); setSavingExamImport(false); return }
+    }
+    setSuccess(`${included.length} exams imported.`)
+    setParsedExams([])
+    setExamImportFile(null)
+    setShowExamImport(false)
+    setSavingExamImport(false)
     load()
   }
 
@@ -437,17 +508,17 @@ export default function TimetablePage() {
           </div>
         )}
 
-        {/* Tab bar: Class / Exam */}
+        {/* Tab bar: Class / Almanac / Exam */}
         <div style={{ display: 'flex', border: '1.5px solid #1C1208' }}>
-          {(['class', 'exam'] as const).map((t, i) => (
+          {(['class', 'almanac', 'exam'] as const).map((t, i) => (
             <button key={t} type="button" onClick={() => setActiveTab(t)} style={{
               flex: 1, padding: '10px', fontSize: '9px', fontWeight: 700, letterSpacing: '1.5px',
               cursor: 'pointer', fontFamily: 'inherit', border: 'none',
-              borderRight: i === 0 ? '1.5px solid #1C1208' : 'none',
+              borderRight: i < 2 ? '1.5px solid #1C1208' : 'none',
               background: activeTab === t ? '#1C1208' : '#F2EDE6',
               color: activeTab === t ? '#F2EDE6' : '#8A6A4A',
             }}>
-              {t === 'class' ? 'CLASS TIMETABLE' : 'EXAM TIMETABLE'}
+              {t === 'class' ? 'CLASS TIMETABLE' : t === 'almanac' ? 'ALMANAC' : 'EXAM TIMETABLE'}
             </button>
           ))}
         </div>
@@ -638,18 +709,107 @@ export default function TimetablePage() {
           </>
         )}
 
+        {/* ── ALMANAC ── */}
+        {activeTab === 'almanac' && (
+          <AlmanacSection
+            me={me}
+            isStaff={!!isStaff}
+            targetDept={targetDept}
+            targetYear={targetYear}
+            supabase={supabase}
+          />
+        )}
+
         {/* ── EXAM TIMETABLE ── */}
         {activeTab === 'exam' && (
           <>
             {isStaff && (
-              <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
-                <button type="button" onClick={() => { setShowExamForm(s => !s); setError('') }} style={{
+              <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end', flexWrap: 'wrap' }}>
+                <button type="button" onClick={() => { setShowExamImport(s => !s); setShowExamForm(false); setError(''); setExamImportError('') }} style={{
+                  background: 'transparent', color: '#1C1208', border: '1.5px solid #1C1208',
+                  padding: '9px 18px', fontSize: '9px', fontWeight: 700,
+                  letterSpacing: '1.5px', cursor: 'pointer', fontFamily: 'inherit',
+                }}>
+                  {showExamImport ? '✕ CLOSE' : '↑ IMPORT PDF'}
+                </button>
+                <button type="button" onClick={() => { setShowExamForm(s => !s); setShowExamImport(false); setError('') }} style={{
                   background: '#1C1208', color: '#F2EDE6', border: 'none',
                   padding: '9px 18px', fontSize: '9px', fontWeight: 700,
                   letterSpacing: '1.5px', cursor: 'pointer', fontFamily: 'inherit',
                 }}>
                   {showExamForm ? '✕ CANCEL' : '+ ADD EXAM'}
                 </button>
+              </div>
+            )}
+
+            {/* Exam PDF import panel */}
+            {isStaff && showExamImport && (
+              <div style={{ border: '1.5px solid #1C1208', background: '#FDFAF5' }}>
+                <div style={{ padding: '10px 18px', borderBottom: '1.5px solid #1C1208', fontSize: '9px', fontWeight: 700, letterSpacing: '2px', color: '#8A6A4A' }}>
+                  IMPORT EXAM TIMETABLE FROM PDF
+                </div>
+                <div style={{ padding: '18px', display: 'flex', flexDirection: 'column', gap: '14px' }}>
+                  <div style={{ fontSize: '11px', color: '#6A4A2A', lineHeight: 1.6 }}>
+                    Upload an exam timetable PDF. Make sure Year and Section are set above before parsing.
+                  </div>
+                  <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
+                    <div
+                      onClick={() => examImportFileRef.current?.click()}
+                      style={{
+                        flex: 1, minWidth: '200px', border: '1.5px dashed #C8A878',
+                        padding: '12px 16px', cursor: 'pointer', background: '#F2EDE6',
+                        fontSize: '11px', color: examImportFile ? '#3D7A50' : '#8A6A4A', fontWeight: examImportFile ? 700 : 400,
+                      }}
+                    >
+                      {examImportFile ? `✓ ${examImportFile.name}` : 'Click to choose PDF file'}
+                    </div>
+                    <input ref={examImportFileRef} type="file" accept="application/pdf" style={{ display: 'none' }}
+                      onChange={e => { setExamImportFile(e.target.files?.[0] ?? null); setExamImportError(''); setParsedExams([]) }} />
+                    <button type="button" onClick={handleParseExam} disabled={examImporting} style={{
+                      background: examImporting ? '#8A6A4A' : '#D94F00', color: '#F2EDE6', border: 'none',
+                      padding: '12px 22px', fontSize: '10px', fontWeight: 700, letterSpacing: '1.5px',
+                      cursor: examImporting ? 'not-allowed' : 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap',
+                    }}>
+                      {examImporting ? 'PARSING...' : 'PARSE WITH AI →'}
+                    </button>
+                  </div>
+
+                  {examImportError && <div style={{ fontSize: '11px', color: '#D94F00', borderLeft: '2px solid #D94F00', paddingLeft: '10px' }}>{examImportError}</div>}
+
+                  {parsedExams.length > 0 && (
+                    <div>
+                      <div style={{ fontSize: '9px', fontWeight: 700, letterSpacing: '1.5px', color: '#8A6A4A', marginBottom: '10px' }}>
+                        REVIEW {parsedExams.length} PARSED EXAMS — EDIT IF NEEDED, UNCHECK TO SKIP
+                      </div>
+                      <div style={{ border: '1.5px solid #1C1208', maxHeight: '320px', overflowY: 'auto', overflowX: 'auto' }}>
+                        {parsedExams.map((ex, i) => (
+                          <div key={i} style={{
+                            display: 'grid', gridTemplateColumns: '24px 1fr 110px 75px 75px 90px',
+                            gap: '6px', alignItems: 'center', padding: '7px 10px',
+                            background: i % 2 === 0 ? '#FDFAF5' : '#F2EDE6',
+                            borderBottom: i < parsedExams.length - 1 ? '1px solid #E0D0B8' : 'none',
+                            minWidth: '560px',
+                          }}>
+                            <input type="checkbox" checked={ex.include} onChange={e => updateParsedExam(i, 'include', e.target.checked)} style={{ accentColor: '#D94F00' }} />
+                            <input type="text" value={ex.exam_subject} onChange={e => updateParsedExam(i, 'exam_subject', e.target.value)} style={{ ...inp, padding: '4px 6px', fontSize: '11px' }} />
+                            <input type="date" value={ex.exam_date} onChange={e => updateParsedExam(i, 'exam_date', e.target.value)} style={{ ...inp, padding: '4px 5px', fontSize: '10px' }} />
+                            <input type="time" value={ex.exam_start_time ?? ''} onChange={e => updateParsedExam(i, 'exam_start_time', e.target.value)} style={{ ...inp, padding: '4px 5px', fontSize: '10px' }} />
+                            <input type="time" value={ex.exam_end_time ?? ''} onChange={e => updateParsedExam(i, 'exam_end_time', e.target.value)} style={{ ...inp, padding: '4px 5px', fontSize: '10px' }} />
+                            <input type="text" value={ex.exam_room ?? ''} onChange={e => updateParsedExam(i, 'exam_room', e.target.value)} placeholder="Room" style={{ ...inp, padding: '4px 5px', fontSize: '10px' }} />
+                          </div>
+                        ))}
+                      </div>
+                      <button type="button" onClick={handleSaveExamImport} disabled={savingExamImport} style={{
+                        marginTop: '12px', width: '100%',
+                        background: savingExamImport ? '#8A6A4A' : '#1C1208', color: '#F2EDE6',
+                        border: 'none', padding: '12px', fontSize: '10px', fontWeight: 700,
+                        letterSpacing: '2px', cursor: savingExamImport ? 'not-allowed' : 'pointer', fontFamily: 'inherit',
+                      }}>
+                        {savingExamImport ? 'SAVING...' : `SAVE ${parsedExams.filter(s => s.include).length} EXAMS →`}
+                      </button>
+                    </div>
+                  )}
+                </div>
               </div>
             )}
 
@@ -726,5 +886,425 @@ export default function TimetablePage() {
         )}
       </main>
     </>
+  )
+}
+
+// ── Almanac types ──────────────────────────────────────────────
+type AlmanacEvent = {
+  id: string
+  academic_year: string
+  semester: number
+  sl_no: number
+  event_name: string
+  date_from: string
+  date_to: string | null
+  event_type: string
+  is_active: boolean
+}
+
+const EVENT_TYPE_COLOR: Record<string, { bg: string; fg: string }> = {
+  academic:     { bg: '#1C1208', fg: '#C8A878' },
+  holiday:      { bg: '#3D7A50', fg: '#F2EDE6' },
+  exam:         { bg: '#D94F00', fg: '#F2EDE6' },
+  registration: { bg: '#8A6A4A', fg: '#F2EDE6' },
+  other:        { bg: '#E8C87A', fg: '#1C1208' },
+}
+
+function formatDateRange(from: string, to: string | null): string {
+  const f = new Date(from + 'T00:00:00')
+  const fStr = f.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })
+  if (!to || to === from) return fStr
+  const t = new Date(to + 'T00:00:00')
+  const tStr = t.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })
+  return `${fStr} — ${tStr}`
+}
+
+function AlmanacSection({ me, isStaff, targetDept, targetYear, supabase }: {
+  me: UserInfo | null
+  isStaff: boolean
+  targetDept: string
+  targetYear: string
+  supabase: ReturnType<typeof createClient>
+}) {
+  const [events, setEvents] = useState<AlmanacEvent[]>([])
+  const [loading, setLoading] = useState(true)
+  const [academicYear, setAcademicYear] = useState('2026-27')
+  const [semester, setSemester] = useState('7')
+  const [showForm, setShowForm] = useState(false)
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState('')
+  const [success, setSuccess] = useState('')
+  const [form, setForm] = useState({
+    sl_no: '', event_name: '', date_from: '', date_to: '', event_type: 'academic',
+  })
+
+  // PDF import state
+  const [showImport, setShowImport] = useState(false)
+  const [importFile, setImportFile] = useState<File | null>(null)
+  const [parsedEvents, setParsedEvents] = useState<Array<{
+    sl_no: number; event_name: string; date_from: string; date_to: string | null
+    event_type: string; semester: number | null; include: boolean
+  }>>([])
+  const [importing, setImporting] = useState(false)
+  const [importError, setImportError] = useState('')
+  const [savingImport, setSavingImport] = useState(false)
+  const importFileRef = useRef<HTMLInputElement | null>(null)
+
+  const dept = targetDept || me?.department || ''
+
+  const load = useCallback(async () => {
+    setLoading(true)
+    const { data } = await supabase
+      .from('almanac')
+      .select('*')
+      .eq('department', dept)
+      .eq('academic_year', academicYear)
+      .eq('semester', parseInt(semester))
+      .eq('is_active', true)
+      .order('sl_no')
+    setEvents((data as AlmanacEvent[]) ?? [])
+    setLoading(false)
+  }, [supabase, dept, academicYear, semester])
+
+  useEffect(() => { load() }, [load])
+
+  async function handleAdd() {
+    if (!form.sl_no) { setError('S.No is required'); return }
+    if (!form.event_name.trim()) { setError('Event name is required'); return }
+    if (!form.date_from) { setError('Start date is required'); return }
+    setSaving(true); setError('')
+    const { data: { user } } = await supabase.auth.getUser()
+    const { error: e } = await supabase.from('almanac').insert({
+      created_by: user!.id,
+      department: dept,
+      academic_year: academicYear,
+      semester: parseInt(semester),
+      sl_no: parseInt(form.sl_no),
+      event_name: form.event_name.trim(),
+      date_from: form.date_from,
+      date_to: form.date_to || null,
+      event_type: form.event_type,
+    })
+    if (e) { setError(e.message); setSaving(false); return }
+    setSuccess('Event added.')
+    setForm({ sl_no: '', event_name: '', date_from: '', date_to: '', event_type: 'academic' })
+    setShowForm(false)
+    setSaving(false)
+    load()
+  }
+
+  async function handleDelete(id: string) {
+    await supabase.from('almanac').update({ is_active: false }).eq('id', id)
+    setEvents(prev => prev.filter(e => e.id !== id))
+  }
+
+  // ── Almanac PDF import ──────────────────────────────────────
+  async function handleParseAlmanac() {
+    if (!importFile) { setImportError('Choose a PDF file first'); return }
+    setImporting(true); setImportError(''); setParsedEvents([])
+    const formData = new FormData()
+    formData.append('file', importFile)
+    try {
+      const res = await fetch(`${process.env.NEXT_PUBLIC_AI_SERVICE_URL}/parse-almanac`, {
+        method: 'POST', body: formData,
+      })
+      const data = await res.json()
+      if (!res.ok) { setImportError(data.detail ?? 'Could not parse PDF'); setImporting(false); return }
+      const result = (data.events ?? []).map((e: { sl_no: number; event_name: string; date_from: string; date_to: string | null; event_type: string; semester: number | null }) => ({ ...e, include: true }))
+      setParsedEvents(result)
+    } catch { setImportError('Could not reach AI service. Is it running?') }
+    setImporting(false)
+  }
+
+  function updateParsedEvent(i: number, field: string, value: string | boolean | number) {
+    setParsedEvents(prev => prev.map((e, idx) => idx === i ? { ...e, [field]: value } : e))
+  }
+
+  async function handleSaveImport() {
+    setSavingImport(true); setImportError('')
+    const { data: { user } } = await supabase.auth.getUser()
+    const included = parsedEvents.filter(e => e.include)
+
+    for (const ev of included) {
+      const { error: e } = await supabase.from('almanac').insert({
+        created_by: user!.id,
+        department: dept,
+        academic_year: academicYear,
+        semester: ev.semester ?? parseInt(semester),
+        sl_no: ev.sl_no,
+        event_name: ev.event_name,
+        date_from: ev.date_from,
+        date_to: ev.date_to || null,
+        event_type: ev.event_type,
+      })
+      if (e) { setImportError('Save failed: ' + e.message); setSavingImport(false); return }
+    }
+    setSuccess(`${included.length} almanac events imported.`)
+    setParsedEvents([])
+    setImportFile(null)
+    setShowImport(false)
+    setSavingImport(false)
+    load()
+  }
+
+  const inp: React.CSSProperties = {
+    width: '100%', border: '1.5px solid #C8A878', background: '#F2EDE6',
+    padding: '9px 12px', fontSize: '13px', color: '#1C1208',
+    outline: 'none', borderRadius: 0, fontFamily: 'inherit', display: 'block',
+  }
+  const lbl: React.CSSProperties = {
+    fontSize: '9px', fontWeight: 700, letterSpacing: '1.5px',
+    color: '#6A4A2A', marginBottom: '5px', display: 'block',
+  }
+
+  // Group by semester for display
+  const today = new Date().toISOString().slice(0, 10)
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+
+      {success && <div style={{ fontSize: '11px', color: '#3D7A50', borderLeft: '2px solid #3D7A50', paddingLeft: '10px' }}>{success}</div>}
+      {error && <div style={{ fontSize: '11px', color: '#D94F00', borderLeft: '2px solid #D94F00', paddingLeft: '10px' }}>{error}</div>}
+
+      {/* Controls */}
+      <div style={{ border: '1.5px solid #1C1208', background: '#FDFAF5', padding: '14px 18px' }}>
+        <div style={{ fontSize: '9px', fontWeight: 700, letterSpacing: '2px', color: '#8A6A4A', marginBottom: '10px' }}>ALMANAC FILTERS</div>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px,1fr))', gap: '10px', alignItems: 'end' }}>
+          <div>
+            <label style={lbl}>ACADEMIC YEAR</label>
+            <input type="text" value={academicYear} onChange={e => setAcademicYear(e.target.value)} placeholder="2026-27" style={inp} />
+          </div>
+          <div>
+            <label style={lbl}>SEMESTER</label>
+            <select value={semester} onChange={e => setSemester(e.target.value)} style={{ ...inp, cursor: 'pointer' }}>
+              {['1','2','3','4','5','6','7','8'].map(s => <option key={s} value={s}>Semester {s}</option>)}
+            </select>
+          </div>
+          {isStaff && (
+            <div style={{ display: 'flex', gap: '8px', alignSelf: 'flex-end' }}>
+              <button type="button" onClick={() => { setShowImport(s => !s); setShowForm(false); setError(''); setImportError('') }} style={{
+                background: 'transparent', color: '#1C1208', border: '1.5px solid #1C1208',
+                padding: '9px 16px', fontSize: '9px', fontWeight: 700,
+                letterSpacing: '1.5px', cursor: 'pointer', fontFamily: 'inherit',
+              }}>
+                {showImport ? '✕ CLOSE' : '↑ IMPORT PDF'}
+              </button>
+              <button type="button" onClick={() => { setShowForm(s => !s); setShowImport(false); setError('') }} style={{
+                background: '#1C1208', color: '#F2EDE6', border: 'none',
+                padding: '9px 16px', fontSize: '9px', fontWeight: 700,
+                letterSpacing: '1.5px', cursor: 'pointer', fontFamily: 'inherit',
+              }}>
+                {showForm ? '✕ CANCEL' : '+ ADD EVENT'}
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Almanac PDF import panel */}
+      {isStaff && showImport && (
+        <div style={{ border: '1.5px solid #1C1208', background: '#FDFAF5' }}>
+          <div style={{ padding: '10px 18px', borderBottom: '1.5px solid #1C1208', fontSize: '9px', fontWeight: 700, letterSpacing: '2px', color: '#8A6A4A' }}>
+            IMPORT ALMANAC FROM PDF
+          </div>
+          <div style={{ padding: '18px', display: 'flex', flexDirection: 'column', gap: '14px' }}>
+            <div style={{ fontSize: '11px', color: '#6A4A2A', lineHeight: 1.6 }}>
+              Upload the official academic almanac PDF (e.g. from the institution). The AI service will
+              extract all numbered events, dates, and semester information for you to review before saving.
+            </div>
+            <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
+              <div
+                onClick={() => importFileRef.current?.click()}
+                style={{
+                  flex: 1, minWidth: '200px', border: '1.5px dashed #C8A878',
+                  padding: '12px 16px', cursor: 'pointer', background: '#F2EDE6',
+                  fontSize: '11px', color: importFile ? '#3D7A50' : '#8A6A4A', fontWeight: importFile ? 700 : 400,
+                }}
+              >
+                {importFile ? `✓ ${importFile.name}` : 'Click to choose PDF file'}
+              </div>
+              <input ref={importFileRef} type="file" accept="application/pdf" style={{ display: 'none' }}
+                onChange={e => { setImportFile(e.target.files?.[0] ?? null); setImportError(''); setParsedEvents([]) }} />
+              <button type="button" onClick={handleParseAlmanac} disabled={importing} style={{
+                background: importing ? '#8A6A4A' : '#D94F00', color: '#F2EDE6', border: 'none',
+                padding: '12px 22px', fontSize: '10px', fontWeight: 700, letterSpacing: '1.5px',
+                cursor: importing ? 'not-allowed' : 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap',
+              }}>
+                {importing ? 'PARSING...' : 'PARSE WITH AI →'}
+              </button>
+            </div>
+
+            {importError && <div style={{ fontSize: '11px', color: '#D94F00', borderLeft: '2px solid #D94F00', paddingLeft: '10px' }}>{importError}</div>}
+
+            {parsedEvents.length > 0 && (
+              <div>
+                <div style={{ fontSize: '9px', fontWeight: 700, letterSpacing: '1.5px', color: '#8A6A4A', marginBottom: '10px' }}>
+                  REVIEW {parsedEvents.length} PARSED EVENTS — EDIT IF NEEDED, UNCHECK TO SKIP
+                </div>
+                <div style={{ border: '1.5px solid #1C1208', maxHeight: '360px', overflowY: 'auto', overflowX: 'auto' }}>
+                  {parsedEvents.map((ev, i) => (
+                    <div key={i} style={{
+                      display: 'grid', gridTemplateColumns: '24px 40px 1fr 100px 110px 110px 90px',
+                      gap: '6px', alignItems: 'center', padding: '7px 10px',
+                      background: i % 2 === 0 ? '#FDFAF5' : '#F2EDE6',
+                      borderBottom: i < parsedEvents.length - 1 ? '1px solid #E0D0B8' : 'none',
+                      minWidth: '620px',
+                    }}>
+                      <input type="checkbox" checked={ev.include} onChange={e => updateParsedEvent(i, 'include', e.target.checked)} style={{ accentColor: '#D94F00' }} />
+                      <input type="number" value={ev.sl_no} onChange={e => updateParsedEvent(i, 'sl_no', parseInt(e.target.value) || 0)} style={{ ...inp, padding: '4px 5px', fontSize: '10px' }} />
+                      <input type="text" value={ev.event_name} onChange={e => updateParsedEvent(i, 'event_name', e.target.value)} style={{ ...inp, padding: '4px 6px', fontSize: '11px' }} />
+                      <select value={ev.event_type} onChange={e => updateParsedEvent(i, 'event_type', e.target.value)} style={{ ...inp, padding: '4px 5px', fontSize: '10px' }}>
+                        <option value="academic">Academic</option>
+                        <option value="exam">Exam</option>
+                        <option value="holiday">Holiday</option>
+                        <option value="registration">Registration</option>
+                        <option value="other">Other</option>
+                      </select>
+                      <input type="date" value={ev.date_from} onChange={e => updateParsedEvent(i, 'date_from', e.target.value)} style={{ ...inp, padding: '4px 5px', fontSize: '10px' }} />
+                      <input type="date" value={ev.date_to ?? ''} onChange={e => updateParsedEvent(i, 'date_to', e.target.value)} style={{ ...inp, padding: '4px 5px', fontSize: '10px' }} />
+                      <input type="number" value={ev.semester ?? ''} onChange={e => updateParsedEvent(i, 'semester', parseInt(e.target.value) || 0)} placeholder="Sem" style={{ ...inp, padding: '4px 5px', fontSize: '10px' }} />
+                    </div>
+                  ))}
+                </div>
+                <button type="button" onClick={handleSaveImport} disabled={savingImport} style={{
+                  marginTop: '12px', width: '100%',
+                  background: savingImport ? '#8A6A4A' : '#1C1208', color: '#F2EDE6',
+                  border: 'none', padding: '12px', fontSize: '10px', fontWeight: 700,
+                  letterSpacing: '2px', cursor: savingImport ? 'not-allowed' : 'pointer', fontFamily: 'inherit',
+                }}>
+                  {savingImport ? 'SAVING...' : `SAVE ${parsedEvents.filter(e => e.include).length} EVENTS →`}
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+      {/* Add form */}
+      {isStaff && showForm && (
+        <div style={{ border: '1.5px solid #1C1208', background: '#FDFAF5' }}>
+          <div style={{ padding: '10px 18px', borderBottom: '1.5px solid #1C1208', fontSize: '9px', fontWeight: 700, letterSpacing: '2px', color: '#8A6A4A' }}>
+            NEW ALMANAC EVENT — {dept} · SEM {semester} · {academicYear}
+          </div>
+          <div style={{ padding: '18px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px,1fr))', gap: '10px' }}>
+              <div>
+                <label style={lbl}>S.NO</label>
+                <input type="number" value={form.sl_no} onChange={e => setForm(p => ({ ...p, sl_no: e.target.value }))} placeholder="1" style={inp} />
+              </div>
+              <div>
+                <label style={lbl}>EVENT TYPE</label>
+                <select value={form.event_type} onChange={e => setForm(p => ({ ...p, event_type: e.target.value }))} style={{ ...inp, cursor: 'pointer' }}>
+                  <option value="academic">Academic</option>
+                  <option value="exam">Exam / Test</option>
+                  <option value="holiday">Holiday</option>
+                  <option value="registration">Registration</option>
+                  <option value="other">Other</option>
+                </select>
+              </div>
+            </div>
+            <div>
+              <label style={lbl}>EVENT NAME</label>
+              <input type="text" value={form.event_name} onChange={e => setForm(p => ({ ...p, event_name: e.target.value }))} placeholder="e.g. Commencement of class work" style={inp} />
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+              <div>
+                <label style={lbl}>DATE FROM</label>
+                <input type="date" value={form.date_from} onChange={e => setForm(p => ({ ...p, date_from: e.target.value }))} style={inp} />
+              </div>
+              <div>
+                <label style={lbl}>DATE TO (leave blank if single day)</label>
+                <input type="date" value={form.date_to} onChange={e => setForm(p => ({ ...p, date_to: e.target.value }))} style={inp} />
+              </div>
+            </div>
+            <button type="button" onClick={handleAdd} disabled={saving} style={{
+              background: saving ? '#8A6A4A' : '#D94F00', color: '#F2EDE6', border: 'none',
+              padding: '11px', fontSize: '10px', fontWeight: 700, letterSpacing: '2px',
+              cursor: saving ? 'not-allowed' : 'pointer', fontFamily: 'inherit',
+            }}>
+              {saving ? 'SAVING...' : 'ADD TO ALMANAC →'}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Almanac table */}
+      {loading ? (
+        <div style={{ fontSize: '11px', color: '#8A6A4A' }}>LOADING...</div>
+      ) : events.length === 0 ? (
+        <div style={{ border: '1.5px solid #1C1208', background: '#FDFAF5', padding: '40px', textAlign: 'center' }}>
+          <div style={{ fontSize: '13px', fontWeight: 700, color: '#1C1208', marginBottom: '6px' }}>No almanac entries</div>
+          <div style={{ fontSize: '11px', color: '#8A6A4A' }}>
+            {isStaff ? `Click + ADD EVENT to create the almanac for Semester ${semester}, ${academicYear}.` : 'Your faculty has not set the almanac yet.'}
+          </div>
+        </div>
+      ) : (
+        <>
+          {/* Header */}
+          <div style={{ border: '1.5px solid #1C1208', background: '#1C1208', padding: '14px 20px' }}>
+            <div style={{ fontSize: '14px', fontWeight: 700, color: '#F2EDE6', letterSpacing: '1px' }}>
+              ALMANAC {academicYear}
+            </div>
+            <div style={{ fontSize: '10px', color: '#8A6A4A', marginTop: '4px', letterSpacing: '1px' }}>
+              {dept} · SEMESTER {semester} · B.E. / B.TECH
+            </div>
+          </div>
+
+          {/* Table */}
+          <div style={{ overflowX: 'auto', border: '1.5px solid #1C1208', borderTop: 'none' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: '480px' }}>
+              <thead>
+                <tr style={{ background: '#F2EDE6' }}>
+                  <th style={{ padding: '10px 14px', fontSize: '9px', fontWeight: 700, letterSpacing: '1.5px', color: '#8A6A4A', textAlign: 'left', border: '1px solid #E0D0B8', width: '50px' }}>S.NO</th>
+                  <th style={{ padding: '10px 14px', fontSize: '9px', fontWeight: 700, letterSpacing: '1.5px', color: '#8A6A4A', textAlign: 'left', border: '1px solid #E0D0B8' }}>EVENT</th>
+                  <th style={{ padding: '10px 14px', fontSize: '9px', fontWeight: 700, letterSpacing: '1.5px', color: '#8A6A4A', textAlign: 'left', border: '1px solid #E0D0B8', whiteSpace: 'nowrap' }}>DATE(S)</th>
+                  {isStaff && <th style={{ padding: '10px 14px', border: '1px solid #E0D0B8', width: '80px' }}></th>}
+                </tr>
+              </thead>
+              <tbody>
+                {events.map((e, i) => {
+                  const tc = EVENT_TYPE_COLOR[e.event_type] ?? EVENT_TYPE_COLOR.other
+                  const isActive = e.date_from <= today && (!e.date_to || e.date_to >= today)
+                  const isPast = e.date_to ? e.date_to < today : e.date_from < today
+                  return (
+                    <tr key={e.id} style={{
+                      background: isActive ? '#FFF8F2' : i % 2 === 0 ? '#FDFAF5' : '#F2EDE6',
+                      opacity: isPast ? 0.65 : 1,
+                    }}>
+                      <td style={{ padding: '11px 14px', border: '1px solid #E0D0B8', textAlign: 'center' }}>
+                        <span style={{ fontSize: '11px', fontWeight: 700, color: '#1C1208' }}>{e.sl_no}</span>
+                      </td>
+                      <td style={{ padding: '11px 14px', border: '1px solid #E0D0B8' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+                          <span style={{ fontSize: '7px', fontWeight: 700, letterSpacing: '1px', padding: '2px 7px', background: tc.bg, color: tc.fg, whiteSpace: 'nowrap' }}>
+                            {e.event_type.toUpperCase()}
+                          </span>
+                          <span style={{ fontSize: '13px', color: '#1C1208', fontWeight: isActive ? 700 : 400 }}>{e.event_name}</span>
+                          {isActive && <span style={{ fontSize: '7px', fontWeight: 700, background: '#D94F00', color: '#F2EDE6', padding: '2px 6px', letterSpacing: '1px' }}>NOW</span>}
+                        </div>
+                      </td>
+                      <td style={{ padding: '11px 14px', border: '1px solid #E0D0B8', whiteSpace: 'nowrap' }}>
+                        <span style={{ fontSize: '11px', color: '#1C1208' }}>{formatDateRange(e.date_from, e.date_to)}</span>
+                      </td>
+                      {isStaff && (
+                        <td style={{ padding: '8px 14px', border: '1px solid #E0D0B8', textAlign: 'center' }}>
+                          <button type="button" onClick={() => handleDelete(e.id)} style={{
+                            background: 'transparent', border: '1px solid #D94F00', color: '#D94F00',
+                            padding: '3px 8px', fontSize: '8px', fontWeight: 700,
+                            cursor: 'pointer', fontFamily: 'inherit', letterSpacing: '1px',
+                          }}>REMOVE</button>
+                        </td>
+                      )}
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
+          <div style={{ fontSize: '10px', color: '#8A6A4A', fontStyle: 'italic', textAlign: 'center' }}>
+            Note: The Almanac may be revised in case of any unforeseen circumstances that may arise from time to time.
+          </div>
+        </>
+      )}
+    </div>
   )
 }

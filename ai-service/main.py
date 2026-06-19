@@ -540,3 +540,156 @@ async def parse_timetable(file: UploadFile = File(...)):
                 "need updating — check current Mistral docs."
             ),
         )
+        
+# ============================================================
+# ADD THESE TO YOUR EXISTING ai_service/main.py
+# Place after your existing /parse-timetable endpoint
+# Do NOT add the old "main-additions.py" block — replace it with this.
+# Reuses your existing MISTRAL_URL, MODEL, httpx, and OCR/text helpers.
+# ============================================================
+
+ALMANAC_EXTRACTION_RULES = """For each event, determine:
+- sl_no: integer (the serial number from the document, e.g. 1, 2, 3...)
+- event_name: string (the event description, cleaned up, e.g. "Commencement of class work")
+- date_from: "YYYY-MM-DD" (convert from whatever format appears, e.g. DD.MM.YYYY)
+- date_to: "YYYY-MM-DD" or null if it's a single-day event
+- event_type: one of "academic", "exam", "holiday", "registration", "other"
+  (use "exam" for Class Test/Examinations, "holiday" for vacations/holidays,
+   "registration" for course registration, "academic" for class work/instruction dates, "other" otherwise)
+- semester: integer if mentioned (e.g. "Semester VII" = 7, "Semester VIII" = 8), otherwise null
+
+Return ONLY a valid JSON array of objects with exactly these keys. No explanation, no markdown formatting, no code fences — just the raw JSON array."""
+
+ALMANAC_TEXT_PROMPT = f"""You are given raw text extracted from an academic almanac PDF from an Indian
+engineering college. The document contains a numbered table of academic events with date ranges, like:
+1. Course Registration (Online) — 06.07.2026 to 11.07.2026
+2. Commencement of class work — 13.07.2026
+3. Class Test - I — 02.09.2026 to 05.09.2026
+4. Dussehra Holidays — 19.10.2026 to 24.10.2026
+
+Extract ALL numbered events you can identify.
+
+{ALMANAC_EXTRACTION_RULES}
+
+ALMANAC TEXT:
+"""
+
+EXAM_EXTRACTION_RULES = """For each exam entry, determine:
+- exam_subject: string (subject name, and code if available e.g. "DBMS (CS401)")
+- exam_date: "YYYY-MM-DD" (convert from whatever format appears, e.g. DD.MM.YYYY or DD-MM-YYYY)
+- exam_start_time: "HH:MM" 24-hour format, or null if not specified
+- exam_end_time: "HH:MM" 24-hour format, or null if not specified
+- exam_room: string (room/venue), or null if not specified
+
+Return ONLY a valid JSON array of objects with exactly these keys. No explanation, no markdown formatting, no code fences — just the raw JSON array."""
+
+EXAM_TEXT_PROMPT = f"""You are given raw text extracted from an exam timetable PDF from an Indian
+engineering college. It lists exam subjects with their dates, times, and rooms, in any layout
+(table, list, or grid format).
+
+Extract ALL exam entries you can identify.
+
+{EXAM_EXTRACTION_RULES}
+
+EXAM TIMETABLE TEXT:
+"""
+
+
+@app.post("/parse-almanac")
+async def parse_almanac(file: UploadFile = File(...)):
+    if file.content_type != "application/pdf":
+        raise HTTPException(status_code=400, detail="Please upload a PDF file")
+
+    if not MISTRAL_API_KEY:
+        raise HTTPException(status_code=500, detail="MISTRAL_API_KEY is not configured")
+
+    file_bytes = await file.read()
+
+    # ── 1. Try direct text extraction ──
+    try:
+        raw_text = extract_pdf_text(file_bytes)
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Could not read PDF: {e}")
+
+    if raw_text.strip():
+        try:
+            events = mistral_parse_with_prompt(ALMANAC_TEXT_PROMPT, raw_text)
+            return {"events": events, "mode": "text"}
+        except httpx.HTTPError as e:
+            raise HTTPException(status_code=502, detail=f"Mistral API error (text mode): {e}")
+
+    # ── 2. No embedded text — render pages and run OCR ──
+    try:
+        images = render_pdf_pages_as_png(file_bytes)
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Could not render PDF pages as images: {e}")
+
+    if not images:
+        raise HTTPException(status_code=400, detail="PDF appears to have no pages")
+
+    ocr_text_parts = []
+    for img_bytes in images:
+        page_text = ocr_image_to_text(img_bytes)
+        if page_text:
+            ocr_text_parts.append(page_text)
+
+    ocr_text = "\n\n--- PAGE BREAK ---\n\n".join(ocr_text_parts)
+
+    if ocr_text.strip():
+        try:
+            events = mistral_parse_with_prompt(ALMANAC_TEXT_PROMPT, ocr_text)
+            return {"events": events, "mode": "ocr"}
+        except httpx.HTTPError as e:
+            raise HTTPException(status_code=502, detail=f"Mistral API error (ocr mode): {e}")
+
+    raise HTTPException(status_code=400, detail="Could not extract any readable text from this PDF")
+
+
+@app.post("/parse-exam-timetable")
+async def parse_exam_timetable(file: UploadFile = File(...)):
+    if file.content_type != "application/pdf":
+        raise HTTPException(status_code=400, detail="Please upload a PDF file")
+
+    if not MISTRAL_API_KEY:
+        raise HTTPException(status_code=500, detail="MISTRAL_API_KEY is not configured")
+
+    file_bytes = await file.read()
+
+    # ── 1. Try direct text extraction ──
+    try:
+        raw_text = extract_pdf_text(file_bytes)
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Could not read PDF: {e}")
+
+    if raw_text.strip():
+        try:
+            slots = mistral_parse_with_prompt(EXAM_TEXT_PROMPT, raw_text)
+            return {"slots": slots, "mode": "text"}
+        except httpx.HTTPError as e:
+            raise HTTPException(status_code=502, detail=f"Mistral API error (text mode): {e}")
+
+    # ── 2. No embedded text — render pages and run OCR ──
+    try:
+        images = render_pdf_pages_as_png(file_bytes)
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Could not render PDF pages as images: {e}")
+
+    if not images:
+        raise HTTPException(status_code=400, detail="PDF appears to have no pages")
+
+    ocr_text_parts = []
+    for img_bytes in images:
+        page_text = ocr_image_to_text(img_bytes)
+        if page_text:
+            ocr_text_parts.append(page_text)
+
+    ocr_text = "\n\n--- PAGE BREAK ---\n\n".join(ocr_text_parts)
+
+    if ocr_text.strip():
+        try:
+            slots = mistral_parse_with_prompt(EXAM_TEXT_PROMPT, ocr_text)
+            return {"slots": slots, "mode": "ocr"}
+        except httpx.HTTPError as e:
+            raise HTTPException(status_code=502, detail=f"Mistral API error (ocr mode): {e}")
+
+    raise HTTPException(status_code=400, detail="Could not extract any readable text from this PDF")

@@ -68,6 +68,58 @@ export async function POST() {
       results.push(`Sent last-day reminder for: ${dl.title}`)
     }
 
+    // 3. Send exam reminders (7, 3, 1 days before)
+    const dayWindows = [7, 3, 1]
+    for (const daysBefore of dayWindows) {
+      const targetDate = new Date()
+      targetDate.setDate(targetDate.getDate() + daysBefore)
+      const targetDateStr = targetDate.toISOString().slice(0, 10)
+
+      const { data: exams } = await admin
+        .from('timetable_slots')
+        .select('*')
+        .eq('timetable_type', 'exam')
+        .eq('is_active', true)
+        .eq('exam_date', targetDateStr)
+
+      for (const ex of exams ?? []) {
+        // Check if already sent
+        const { data: existingLog } = await admin
+          .from('exam_reminder_log')
+          .select('id')
+          .eq('slot_id', ex.id)
+          .eq('days_before', daysBefore)
+          .limit(1)
+
+        if (existingLog && existingLog.length > 0) continue
+
+        const title = daysBefore === 1
+          ? `Exam Tomorrow: ${ex.exam_subject}`
+          : `${ex.exam_subject} exam in ${daysBefore} days`
+
+        const dateStr = new Date(ex.exam_date).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })
+        const timeStr = ex.exam_start_time ? ` at ${ex.exam_start_time}` : ''
+        const roomStr = ex.exam_room ? ` in ${ex.exam_room}` : ''
+
+        const message = daysBefore === 1
+          ? `${ex.exam_subject} exam is tomorrow (${dateStr})${timeStr}${roomStr}. Make sure you are well prepared.`
+          : `${ex.exam_subject} exam is scheduled on ${dateStr}${roomStr}. ${daysBefore} days remaining — start preparing.`
+
+        await admin.from('notifications').insert({
+          sender_id: ex.created_by,
+          target_dept: ex.department,
+          target_section: ex.section,
+          target_year: ex.year,
+          title,
+          message,
+          priority: daysBefore === 1 ? 'urgent' : 'normal',
+        })
+
+        await admin.from('exam_reminder_log').insert({ slot_id: ex.id, days_before: daysBefore })
+        results.push(`Sent exam reminder (${daysBefore}d): ${ex.exam_subject}`)
+      }
+    }
+
     return NextResponse.json({ ok: true, results })
 
   } catch (err: unknown) {
