@@ -121,8 +121,8 @@ function SubjectCard({
             <span style={{ fontSize: '7px', fontWeight: 700, letterSpacing: '1px', padding: '2px 6px', background: '#1C1208', color: '#C8A878' }}>
               {TYPE_LABEL[s.subject_type]}
             </span>
-            {/* ── CREDITS FORMAT FIX: was {s.credits}cr, now Credits — {s.credits} ── */}
-            {s.credits && <span style={{ fontSize: '9px', color: '#8A6A4A' }}>Credits — {s.credits}</span>}
+            {/* ── CREDITS FORMAT FIX: was {s.credits}cr, now Credits - {s.credits} ── */}
+            {s.credits && <span style={{ fontSize: '9px', color: '#8A6A4A' }}>Credits - {s.credits}</span>}
           </div>
           <div style={{ fontSize: '10px', color: '#8A6A4A', marginTop: '3px' }}>
             {s.department} · Y{s.year}{s.section ? ` · Sec ${s.section}` : ''}
@@ -160,7 +160,7 @@ function SubjectCard({
                     }}>EDIT NOTES</button>
                   </div>
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px,1fr))', gap: '10px', fontSize: '11px', color: '#1C1208' }}>
-                    <div><span style={{ color: '#8A6A4A', fontSize: '9px', fontWeight: 700, display: 'block', marginBottom: '3px' }}>DIFFICULTY</span>{note?.difficulty_level ?? '—'}</div>
+                    <div><span style={{ color: '#8A6A4A', fontSize: '9px', fontWeight: 700, display: 'block', marginBottom: '3px' }}>DIFFICULTY</span>{note?.difficulty_level ?? '-'}</div>
                     <div><span style={{ color: '#8A6A4A', fontSize: '9px', fontWeight: 700, display: 'block', marginBottom: '3px' }}>FOR PLACEMENTS</span>{note?.important_for_placements ? 'Yes' : 'No'}</div>
                     <div><span style={{ color: '#8A6A4A', fontSize: '9px', fontWeight: 700, display: 'block', marginBottom: '3px' }}>FOR HIGHER STUDIES</span>{note?.important_for_higher ? 'Yes' : 'No'}</div>
                   </div>
@@ -462,7 +462,7 @@ export default function SubjectsPage() {
 
         {!isStaff && (
           <div style={{ fontSize: '11px', color: '#6A4A2A', background: '#F2EDE6', padding: '10px 14px', border: '1px solid #E0D0B8' }}>
-            These subjects are defined by your faculty. Click any subject to add your personal notes — difficulty, important topics, and placement-relevant topics. These feed into the AI Planner.
+            These subjects are defined by your faculty. Click any subject to add your personal notes - difficulty, important topics, and placement-relevant topics. These feed into the AI Planner.
           </div>
         )}
 

@@ -3,7 +3,7 @@ import { createClient } from '@supabase/supabase-js'
 
 // Resolves a login identifier (roll number OR email) to the
 // account's email address, so the client can call
-// signInWithPassword() with an actual email — Supabase Auth
+// signInWithPassword() with an actual email - Supabase Auth
 // only accepts email natively.
 export async function POST(req: Request) {
   try {
@@ -15,7 +15,7 @@ export async function POST(req: Request) {
 
     const value = identifier.trim()
 
-    // Already looks like an email — pass it straight through,
+    // Already looks like an email - pass it straight through,
     // no lookup needed.
     if (value.includes('@')) {
       return NextResponse.json({ email: value })
@@ -31,7 +31,7 @@ export async function POST(req: Request) {
       serviceKey
     )
 
-    // Roll number — case-insensitive lookup
+    // Roll number - case-insensitive lookup
     const { data, error } = await admin
       .from('users')
       .select('email')

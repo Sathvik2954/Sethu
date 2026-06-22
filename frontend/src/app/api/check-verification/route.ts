@@ -31,7 +31,7 @@ export async function POST() {
       return NextResponse.json({ terminated: false })
     }
 
-    // Student unverified after 7 days — terminate
+    // Student unverified after 7 days - terminate
     const created = new Date(profile.created_at)
     const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)
 

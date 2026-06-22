@@ -121,7 +121,7 @@ function ClassGrid({ slots }: { slots: Slot[] }) {
                         {slot.room && <div style={{ fontSize: '9px', color: '#C8A878', marginTop: '2px' }}>{slot.room}</div>}
                       </>
                     ) : (
-                      <span style={{ fontSize: '10px', color: '#D4C8B8' }}>—</span>
+                      <span style={{ fontSize: '10px', color: '#D4C8B8' }}>-</span>
                     )}
                   </td>
                 )
@@ -177,7 +177,7 @@ function ExamList({ slots }: { slots: Slot[] }) {
             <div style={{ flex: 1, minWidth: 0 }}>
               <div style={{ fontSize: '13px', fontWeight: 700, color: '#1C1208' }}>{s.exam_subject}</div>
               <div style={{ fontSize: '10px', color: '#8A6A4A', marginTop: '3px' }}>
-                {s.exam_start_time && s.exam_end_time ? `${s.exam_start_time} – ${s.exam_end_time}` : ''}
+                {s.exam_start_time && s.exam_end_time ? `${s.exam_start_time} - ${s.exam_end_time}` : ''}
                 {s.exam_room ? ` · ${s.exam_room}` : ''}
               </div>
             </div>
@@ -313,7 +313,7 @@ export default function TimetablePage() {
         year: parseInt(targetYear),
         section: targetSection,
         day: dayMap[slot.day_of_week] ?? 'MON',
-        slot_label: `${slot.start_time}–${slot.end_time}`,
+        slot_label: `${slot.start_time}-${slot.end_time}`,
         subject_code: slot.subject_code || null,
         subject_name: slot.subject_name || slot.subject_code || null,
         room: slot.room || null,
@@ -583,7 +583,7 @@ export default function TimetablePage() {
                   {parsedSlots.length > 0 && (
                     <div>
                       <div style={{ fontSize: '9px', fontWeight: 700, letterSpacing: '1.5px', color: '#8A6A4A', marginBottom: '10px' }}>
-                        REVIEW {parsedSlots.length} PARSED SLOTS — EDIT IF NEEDED, UNCHECK TO SKIP
+                        REVIEW {parsedSlots.length} PARSED SLOTS - EDIT IF NEEDED, UNCHECK TO SKIP
                       </div>
                       <div style={{ border: '1.5px solid #1C1208', maxHeight: '320px', overflowY: 'auto', overflowX: 'auto' }}>
                         {parsedSlots.map((s, i) => (
@@ -607,7 +607,7 @@ export default function TimetablePage() {
                               <option value="break">Break</option>
                             </select>
                             <div style={{ fontSize: '11px', color: '#1C1208', fontWeight: 600 }}>
-                              {s.subject_code ? `${s.subject_code} — ` : ''}{s.subject_name ?? ''}
+                              {s.subject_code ? `${s.subject_code} - ` : ''}{s.subject_name ?? ''}
                             </div>
                             <div style={{ fontSize: '10px', color: '#8A6A4A' }}>{s.room ?? ''}</div>
                           </div>
@@ -693,7 +693,7 @@ export default function TimetablePage() {
                         }}>
                           <span style={{ fontSize: '9px', fontWeight: 700, color: '#D94F00', minWidth: '30px' }}>{s.day}</span>
                           <span style={{ fontSize: '9px', color: '#8A6A4A', minWidth: '70px' }}>{s.slot_label}</span>
-                          <span style={{ fontSize: '12px', fontWeight: 700, color: '#1C1208', flex: 1 }}>{s.subject_code ? `${s.subject_code} — ` : ''}{s.subject_name}</span>
+                          <span style={{ fontSize: '12px', fontWeight: 700, color: '#1C1208', flex: 1 }}>{s.subject_code ? `${s.subject_code} - ` : ''}{s.subject_name}</span>
                           {s.room && <span style={{ fontSize: '10px', color: '#8A6A4A' }}>{s.room}</span>}
                           <button type="button" onClick={() => deleteSlot(s.id)} style={{
                             background: 'transparent', border: '1px solid #D94F00', color: '#D94F00',
@@ -779,7 +779,7 @@ export default function TimetablePage() {
                   {parsedExams.length > 0 && (
                     <div>
                       <div style={{ fontSize: '9px', fontWeight: 700, letterSpacing: '1.5px', color: '#8A6A4A', marginBottom: '10px' }}>
-                        REVIEW {parsedExams.length} PARSED EXAMS — EDIT IF NEEDED, UNCHECK TO SKIP
+                        REVIEW {parsedExams.length} PARSED EXAMS - EDIT IF NEEDED, UNCHECK TO SKIP
                       </div>
                       <div style={{ border: '1.5px solid #1C1208', maxHeight: '320px', overflowY: 'auto', overflowX: 'auto' }}>
                         {parsedExams.map((ex, i) => (
@@ -869,7 +869,7 @@ export default function TimetablePage() {
                         }}>
                           <span style={{ fontSize: '10px', fontWeight: 700, color: '#1C1208', minWidth: '80px' }}>{s.exam_date}</span>
                           <span style={{ fontSize: '12px', fontWeight: 700, color: '#1C1208', flex: 1 }}>{s.exam_subject}</span>
-                          <span style={{ fontSize: '10px', color: '#8A6A4A' }}>{s.exam_start_time} – {s.exam_end_time}</span>
+                          <span style={{ fontSize: '10px', color: '#8A6A4A' }}>{s.exam_start_time} - {s.exam_end_time}</span>
                           {s.exam_room && <span style={{ fontSize: '10px', color: '#8A6A4A' }}>{s.exam_room}</span>}
                           <button type="button" onClick={() => deleteSlot(s.id)} style={{
                             background: 'transparent', border: '1px solid #D94F00', color: '#D94F00',
@@ -916,7 +916,7 @@ function formatDateRange(from: string, to: string | null): string {
   if (!to || to === from) return fStr
   const t = new Date(to + 'T00:00:00')
   const tStr = t.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })
-  return `${fStr} — ${tStr}`
+  return `${fStr} - ${tStr}`
 }
 
 function AlmanacSection({ me, isStaff, targetDept, targetYear, supabase }: {
@@ -1139,7 +1139,7 @@ function AlmanacSection({ me, isStaff, targetDept, targetYear, supabase }: {
             {parsedEvents.length > 0 && (
               <div>
                 <div style={{ fontSize: '9px', fontWeight: 700, letterSpacing: '1.5px', color: '#8A6A4A', marginBottom: '10px' }}>
-                  REVIEW {parsedEvents.length} PARSED EVENTS — EDIT IF NEEDED, UNCHECK TO SKIP
+                  REVIEW {parsedEvents.length} PARSED EVENTS - EDIT IF NEEDED, UNCHECK TO SKIP
                 </div>
                 <div style={{ border: '1.5px solid #1C1208', maxHeight: '360px', overflowY: 'auto', overflowX: 'auto' }}>
                   {parsedEvents.map((ev, i) => (
@@ -1183,7 +1183,7 @@ function AlmanacSection({ me, isStaff, targetDept, targetYear, supabase }: {
       {isStaff && showForm && (
         <div style={{ border: '1.5px solid #1C1208', background: '#FDFAF5' }}>
           <div style={{ padding: '10px 18px', borderBottom: '1.5px solid #1C1208', fontSize: '9px', fontWeight: 700, letterSpacing: '2px', color: '#8A6A4A' }}>
-            NEW ALMANAC EVENT — {dept} · SEM {semester} · {academicYear}
+            NEW ALMANAC EVENT - {dept} · SEM {semester} · {academicYear}
           </div>
           <div style={{ padding: '18px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px,1fr))', gap: '10px' }}>

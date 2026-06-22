@@ -49,7 +49,7 @@ export default async function WelcomePage() {
         <div style={{ height: '3px', width: '48px', background: '#D94F00', margin: '20px auto 24px' }} />
 
         <p style={{ fontSize: '13px', color: '#6A4A2A', lineHeight: 1.7, marginBottom: '32px' }}>
-          Your account is verified and ready. Thank you for joining SETHU —
+          Your account is verified and ready. Thank you for joining SETHU -
           CBIT&apos;s unified platform for academic planning, AI-powered
           study prioritisation, and digital administrative workflows.
         </p>

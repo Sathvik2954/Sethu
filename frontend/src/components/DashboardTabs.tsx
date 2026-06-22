@@ -507,7 +507,7 @@ export default function DashboardTabs({ profile, userId, overviewContent, isAdmi
             </div>
             <input ref={fileRef} type="file" accept="image/*" style={{ display: 'none' }} onChange={handlePhotoUpload} />
             <div style={{ flex: 1 }}>
-              <div style={{ fontSize: '20px', fontWeight: 700, color: '#1C1208' }}>{personal.full_name || '—'}</div>
+              <div style={{ fontSize: '20px', fontWeight: 700, color: '#1C1208' }}>{personal.full_name || '-'}</div>
               <div style={{ fontSize: '11px', color: '#8A6A4A', marginTop: '3px' }}>
                 {resume.headline || <span style={{ fontStyle: 'italic', color: '#C8A878' }}>Add a headline...</span>}
               </div>
@@ -592,7 +592,7 @@ export default function DashboardTabs({ profile, userId, overviewContent, isAdmi
                   <Grid>
                     <Field label="INSTITUTION" value={e.institution} onChange={v => { const a = [...resume.education]; a[i] = { ...a[i], institution: v }; updR('education', a) }} placeholder="CBIT, Hyderabad" />
                     <Field label="DEGREE" value={e.degree} onChange={v => { const a = [...resume.education]; a[i] = { ...a[i], degree: v }; updR('education', a) }} placeholder="B.Tech AI & ML" />
-                    <Field label="YEAR" value={e.year} onChange={v => { const a = [...resume.education]; a[i] = { ...a[i], year: v }; updR('education', a) }} placeholder="2022 – 2026" />
+                    <Field label="YEAR" value={e.year} onChange={v => { const a = [...resume.education]; a[i] = { ...a[i], year: v }; updR('education', a) }} placeholder="2022 - 2026" />
                     <Field label="GPA / PERCENTAGE" value={e.gpa} onChange={v => { const a = [...resume.education]; a[i] = { ...a[i], gpa: v }; updR('education', a) }} placeholder="8.5 / 10" />
                   </Grid>
                   <DeleteBtn onClick={() => updR('education', resume.education.filter((_: EduItem, j: number) => j !== i))} />

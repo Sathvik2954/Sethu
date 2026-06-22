@@ -103,7 +103,7 @@ export async function POST() {
 
         const message = daysBefore === 1
           ? `${ex.exam_subject} exam is tomorrow (${dateStr})${timeStr}${roomStr}. Make sure you are well prepared.`
-          : `${ex.exam_subject} exam is scheduled on ${dateStr}${roomStr}. ${daysBefore} days remaining — start preparing.`
+          : `${ex.exam_subject} exam is scheduled on ${dateStr}${roomStr}. ${daysBefore} days remaining - start preparing.`
 
         await admin.from('notifications').insert({
           sender_id: ex.created_by,

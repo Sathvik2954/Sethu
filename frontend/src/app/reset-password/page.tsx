@@ -147,9 +147,9 @@ function ResetForm() {
                 ))}
               </div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '5px' }}>
-                <div style={reqRow(checks.length)}><span>{checks.length ? '✓' : '—'}</span><span>Minimum 8 characters</span></div>
-                <div style={reqRow(checks.cases)}><span>{checks.cases ? '✓' : '—'}</span><span>Upper &amp; lowercase letters</span></div>
-                <div style={reqRow(checks.numberSymbol)}><span>{checks.numberSymbol ? '✓' : '—'}</span><span>A number and a symbol</span></div>
+                <div style={reqRow(checks.length)}><span>{checks.length ? '✓' : '-'}</span><span>Minimum 8 characters</span></div>
+                <div style={reqRow(checks.cases)}><span>{checks.cases ? '✓' : '-'}</span><span>Upper &amp; lowercase letters</span></div>
+                <div style={reqRow(checks.numberSymbol)}><span>{checks.numberSymbol ? '✓' : '-'}</span><span>A number and a symbol</span></div>
               </div>
             </div>
             {error && (

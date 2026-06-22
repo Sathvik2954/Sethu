@@ -123,26 +123,26 @@ function RequestCard({ r }: { r: Request }) {
       {open && (
         <div style={{ borderTop: '1px solid #E0D0B8', padding: '16px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
           {r.request_type === 'event_permission' && (<>
-            <Row label="Date" value={r.event_end_date ? `${r.event_date} to ${r.event_end_date}` : (r.event_date ?? '—')} />
-            <Row label="Subject" value={r.event_subject ?? '—'} />
-            <Row label="Content" value={r.event_content ?? '—'} />
+            <Row label="Date" value={r.event_end_date ? `${r.event_date} to ${r.event_end_date}` : (r.event_date ?? '-')} />
+            <Row label="Subject" value={r.event_subject ?? '-'} />
+            <Row label="Content" value={r.event_content ?? '-'} />
             <Row label="Signature" value={r.signature_confirm ? 'Confirmed' : 'Not confirmed'} />
           </>)}
-          {r.request_type === 'complaint' && <Row label="Problem" value={r.problem_description ?? '—'} />}
+          {r.request_type === 'complaint' && <Row label="Problem" value={r.problem_description ?? '-'} />}
           {r.request_type === 'gate_pass' && (<>
-            <Row label="Date" value={r.gate_pass_date ?? '—'} />
-            <Row label="Reason" value={r.gate_pass_reason ?? '—'} />
-            <Row label="Return Time" value={r.gate_pass_return_time ?? '—'} />
+            <Row label="Date" value={r.gate_pass_date ?? '-'} />
+            <Row label="Reason" value={r.gate_pass_reason ?? '-'} />
+            <Row label="Return Time" value={r.gate_pass_return_time ?? '-'} />
           </>)}
-          {r.request_type === 'suggestion' && <Row label="Suggestion" value={r.suggestion_text ?? '—'} />}
+          {r.request_type === 'suggestion' && <Row label="Suggestion" value={r.suggestion_text ?? '-'} />}
           {r.request_type === 'bonafide' && (<>
-            <Row label="Purpose" value={r.bonafide_purpose ?? '—'} />
+            <Row label="Purpose" value={r.bonafide_purpose ?? '-'} />
             {r.bonafide_notes && <Row label="Notes" value={r.bonafide_notes} />}
           </>)}
           {r.request_type === 'lost_id_card' && (<>
-            <Row label="Lost On" value={r.lost_date ?? '—'} />
-            <Row label="Location" value={r.lost_location ?? '—'} />
-            <Row label="Description" value={r.lost_description ?? '—'} />
+            <Row label="Lost On" value={r.lost_date ?? '-'} />
+            <Row label="Location" value={r.lost_location ?? '-'} />
+            <Row label="Description" value={r.lost_description ?? '-'} />
           </>)}
           {r.request_type === 'fees' && (<>
             <Row label="Fee Type" value={
@@ -222,7 +222,7 @@ function FileUpload({
       }}>
         {paymentFile
           ? <span style={{ fontSize: '12px', color: '#3D7A50', fontWeight: 700 }}>✓ {paymentFile.name}</span>
-          : <span style={{ fontSize: '11px', color: '#8A6A4A' }}>Click to upload payment screenshot (JPG, PNG, PDF — max 5MB)</span>
+          : <span style={{ fontSize: '11px', color: '#8A6A4A' }}>Click to upload payment screenshot (JPG, PNG, PDF - max 5MB)</span>
         }
       </div>
       <input ref={fileRef} type="file" accept="image/*,application/pdf" style={{ display: 'none' }}
@@ -537,7 +537,7 @@ export default function RequestsPage() {
             fontSize: '16px', fontWeight: 700, color: '#D94F00',
             letterSpacing: '1px', padding: '14px 20px', border: '1.5px solid #1C1208',
           }}>
-            HEAD OF THE DEPARTMENT — REQUESTS
+            HEAD OF THE DEPARTMENT - REQUESTS
           </div>
           <div style={{
             display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)',
@@ -562,7 +562,7 @@ export default function RequestsPage() {
             fontSize: '16px', fontWeight: 700, color: '#D94F00',
             letterSpacing: '1px', padding: '14px 20px', border: '1.5px solid #1C1208',
           }}>
-            ADMINISTRATIVE — REQUESTS
+            ADMINISTRATIVE - REQUESTS
           </div>
           <div style={{
             display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)',

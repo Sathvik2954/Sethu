@@ -247,7 +247,7 @@ export default function PlannerPage() {
                     />
                     <div style={{ minWidth: 0 }}>
                       <div style={{ fontSize: '12px', fontWeight: 700, color: '#1C1208' }}>
-                        {s.subject_code ? `${s.subject_code} — ` : ''}{s.subject_name}
+                        {s.subject_code ? `${s.subject_code} - ` : ''}{s.subject_name}
                       </div>
                       <div style={{ fontSize: '9px', color: '#8A6A4A', marginTop: '2px', textTransform: 'capitalize' }}>{s.subject_type}</div>
                     </div>
@@ -318,7 +318,7 @@ export default function PlannerPage() {
 
             <div>
               <div style={{ fontSize: '9px', fontWeight: 700, letterSpacing: '2px', color: '#8A6A4A', marginBottom: '10px' }}>
-                SUBJECT PRIORITIES — {selected.size} SUBJECTS ANALYSED
+                SUBJECT PRIORITIES - {selected.size} SUBJECTS ANALYSED
               </div>
               {result.priorities.map((p, i) => {
                 const lc = LEVEL_COLOR[p.level] ?? LEVEL_COLOR.low

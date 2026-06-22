@@ -121,7 +121,7 @@ export async function POST(req: Request) {
     page.drawText('CHAITANYA BHARATHI INSTITUTE OF TECHNOLOGY, HYDERABAD', {
       x: M, y: y - 22, size: 7.5, font: bold, color: BROWN,
     })
-    page.drawText('Gandipet, Hyderabad — 500075 | Telangana, India', {
+    page.drawText('Gandipet, Hyderabad - 500075 | Telangana, India', {
       x: M, y: y - 34, size: 7, font: helv, color: BROWN,
     })
 
@@ -143,10 +143,10 @@ export async function POST(req: Request) {
     // ── Student details ───────────────────────────────────────
     const s = request.student
     const studentRows: [string, string][] = [
-      ['STUDENT NAME',  s?.full_name   ?? '—'],
-      ['ROLL NUMBER',   s?.roll_number ?? '—'],
-      ['DEPARTMENT',    s?.department  ?? '—'],
-      ['YEAR / SECTION', `${s?.year ?? '—'} / ${s?.section ?? '—'}`],
+      ['STUDENT NAME',  s?.full_name   ?? '-'],
+      ['ROLL NUMBER',   s?.roll_number ?? '-'],
+      ['DEPARTMENT',    s?.department  ?? '-'],
+      ['YEAR / SECTION', `${s?.year ?? '-'} / ${s?.section ?? '-'}`],
     ]
     page.drawText('STUDENT DETAILS', { x: M, y, size: 8, font: bold, color: BROWN })
     y -= 16
@@ -245,7 +245,7 @@ export async function POST(req: Request) {
     y -= 16
     page.drawText(`REF: ${ref}`, { x: M, y, size: 7.5, font: bold, color: BROWN })
     page.drawText(`ISSUED: ${issued}`, { x: M + 130, y, size: 7.5, font: helv, color: BROWN })
-    page.drawText('DIGITALLY GENERATED — NO PHYSICAL SIGNATURE REQUIRED', {
+    page.drawText('DIGITALLY GENERATED - NO PHYSICAL SIGNATURE REQUIRED', {
       x: width - M - 230, y, size: 7.5, font: bold, color: BROWN,
     })
 

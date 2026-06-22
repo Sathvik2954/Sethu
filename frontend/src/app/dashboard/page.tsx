@@ -71,13 +71,13 @@ export default async function DashboardPage() {
         { label: 'PENDING REQUESTS', value: requestCount ?? 0, flag: requestCount ? 'ACTION NEEDED' : 'ALL CLEAR', flagColor: requestCount ? '#D94F00' : '#3D7A50' },
         { label: 'DEPT SUBJECTS', value: subjectCount ?? 0, flag: subjectCount ? 'ACTIVE' : 'ADD SUBJECTS', flagColor: subjectCount ? '#3D7A50' : '#E8C87A' },
         { label: 'ACTIVE DEADLINES', value: deadlineCount ?? 0, flag: deadlineCount ? 'IN PROGRESS' : 'NONE', flagColor: deadlineCount ? '#E8C87A' : '#3D7A50' },
-        { label: 'NOTIFICATIONS', value: '—', flag: 'SEND UPDATE', flagColor: '#8A6A4A' },
+        { label: 'NOTIFICATIONS', value: '-', flag: 'SEND UPDATE', flagColor: '#8A6A4A' },
       ]
     : [
         { label: 'SUBJECTS THIS SEM', value: subjectCount ?? 0, flag: subjectCount ? 'TRACKED' : 'PENDING', flagColor: subjectCount ? '#3D7A50' : '#D94F00' },
         { label: 'OPEN DEADLINES', value: deadlineCount ?? 0, flag: deadlineCount ? 'PENDING' : 'ALL CLEAR', flagColor: deadlineCount ? '#E8C87A' : '#3D7A50' },
         { label: 'ACTIVE REQUESTS', value: requestCount ?? 0, flag: requestCount ? 'IN PROGRESS' : 'NONE', flagColor: requestCount ? '#E8C87A' : '#3D7A50' },
-        { label: 'AI PLANNER', value: '—', flag: 'SETUP NEEDED', flagColor: '#D94F00' },
+        { label: 'AI PLANNER', value: '-', flag: 'SETUP NEEDED', flagColor: '#D94F00' },
       ]
 
   const overviewContent = (
@@ -117,7 +117,7 @@ export default async function DashboardPage() {
           <p style={{ fontSize: '11px', color: '#8A6A4A', margin: '4px 0 0' }}>
             {isStaff
               ? `${(profile?.role ?? '').toUpperCase()} · ${profile?.department ?? ''}`
-              : `ROLL NO ${profile?.roll_number ?? '—'}`
+              : `ROLL NO ${profile?.roll_number ?? '-'}`
             }
           </p>
         </div>
@@ -154,8 +154,8 @@ export default async function DashboardPage() {
                 </div>
               </div>
             )) : [
-              { num: '01', title: 'Add your subjects', desc: 'Your faculty will define subjects — check the Subjects page to annotate them.', done: (subjectCount ?? 0) > 0 },
-              { num: '02', title: 'View your timetable', desc: 'Your faculty has set your class and exam timetable — check the Timetable page.', done: false },
+              { num: '01', title: 'Add your subjects', desc: 'Your faculty will define subjects - check the Subjects page to annotate them.', done: (subjectCount ?? 0) > 0 },
+              { num: '02', title: 'View your timetable', desc: 'Your faculty has set your class and exam timetable - check the Timetable page.', done: false },
               { num: '03', title: 'Run the AI planner', desc: 'Once subjects and timetable are set, Mistral generates your daily study priorities.', done: false },
             ].map((s, i) => (
               <div key={s.num} style={{ display: 'flex', gap: '14px', alignItems: 'flex-start', padding: '12px 0', borderBottom: i < 2 ? '1px solid #EDE0CC' : 'none' }}>

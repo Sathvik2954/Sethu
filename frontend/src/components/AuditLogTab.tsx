@@ -95,7 +95,7 @@ export default function AuditLogTab() {
       <div>
         <h1 style={{ fontSize: '18px', fontWeight: 700, color: '#1C1208', margin: 0 }}>Audit Log</h1>
         <p style={{ fontSize: '11px', color: '#8A6A4A', margin: '3px 0 0' }}>
-          Record of sensitive actions taken by staff — account changes and request decisions. Last 200 entries.
+          Record of sensitive actions taken by staff - account changes and request decisions. Last 200 entries.
         </p>
       </div>
 

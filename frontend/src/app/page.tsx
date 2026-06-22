@@ -91,7 +91,7 @@ export default function HomePage() {
             fontSize: '10px', color: '#8A6A4A', letterSpacing: '2px', marginBottom: '40px',
             opacity: 0, animation: 'sethuFadeUp 0.6s ease-out 0.35s forwards',
           }}>
-            — BENJAMIN FRANKLIN
+            - BENJAMIN FRANKLIN
           </div>
 
           <div style={{
@@ -120,7 +120,7 @@ export default function HomePage() {
         height: '44px', display: 'flex', alignItems: 'center',
         justifyContent: 'space-between', padding: '0 clamp(16px, 5vw, 48px)'
       }}>
-        <span style={{ fontSize: '10px', color: '#8A6A4A', letterSpacing: '1px' }}>SETHU — CBIT · 2025</span>
+        <span style={{ fontSize: '10px', color: '#8A6A4A', letterSpacing: '1px' }}>SETHU - CBIT · 2025</span>
       </footer>
 
       <style jsx>{`

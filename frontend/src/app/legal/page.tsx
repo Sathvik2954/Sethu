@@ -154,9 +154,9 @@ export default function LegalPage() {
           </Block>
 
           <Table rows={[
-            ['Account data', 'Full name, email address, password (hashed — never stored in plain text)'],
+            ['Account data', 'Full name, email address, password (hashed - never stored in plain text)'],
             ['Academic data', 'Roll number, department, year of study, section'],
-            ['Profile data', 'Phone number, blood group, profile photo, professional summary, education history, experience, projects, certifications, and skills — all entered voluntarily'],
+            ['Profile data', 'Phone number, blood group, profile photo, professional summary, education history, experience, projects, certifications, and skills - all entered voluntarily'],
             ['Request data', 'Content of submitted requests including descriptions, dates, and payment screenshots'],
             ['Communication data', 'Notifications sent and received, read receipts, deadline information'],
             ['Usage data', 'Timetable slots, subject annotations, AI planner inputs'],
@@ -366,7 +366,7 @@ function List({ items }: { items: string[] }) {
           display: 'flex', gap: '12px', alignItems: 'flex-start',
           padding: '8px 0', borderBottom: i < items.length - 1 ? '1px solid #E0D0B8' : 'none',
         }}>
-          <span style={{ fontSize: '10px', color: '#D94F00', fontWeight: 700, flexShrink: 0, marginTop: '2px' }}>—</span>
+          <span style={{ fontSize: '10px', color: '#D94F00', fontWeight: 700, flexShrink: 0, marginTop: '2px' }}>-</span>
           <span style={{ fontSize: '13px', color: '#3A2A1A', lineHeight: 1.7 }}>{item}</span>
         </li>
       ))}

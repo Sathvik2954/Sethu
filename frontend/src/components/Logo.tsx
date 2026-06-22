@@ -3,7 +3,7 @@ type LogoProps = {
   size?: number
 }
 
-// SETHU mark — inspired by the Kakatiya Kala Thoranam (Warangal Gate):
+// SETHU mark - inspired by the Kakatiya Kala Thoranam (Warangal Gate):
 // four pillars, a carved lintel, a base platform, and the corner
 // finials reduced to two orange accent dots.
 export default function Logo({ variant = 'light', size = 48 }: LogoProps) {

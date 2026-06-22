@@ -111,7 +111,7 @@ function RequestDetail({ r }: { r: Request }) {
 }
 
 // ── Main component ─────────────────────────────────────────────
-// ── Payment screenshot — generates a signed URL on click since the
+// ── Payment screenshot - generates a signed URL on click since the
 // request-attachments bucket is private ──────────────────────────
 function PaymentScreenshotLink({ path, supabase }: { path: string; supabase: ReturnType<typeof createClient> }) {
   const [loading, setLoading] = useState(false)
@@ -209,7 +209,7 @@ export default function ApprovalsPage() {
         target_id: r.id,
         details: { request_type: r.request_type, student_name: r.student?.full_name ?? null, previous_status: r.status },
       }),
-    }).catch(() => {}) // non-blocking — don't fail the approval if logging fails
+    }).catch(() => {}) // non-blocking - don't fail the approval if logging fails
 
     // Auto-generate PDF when approved
     if (newStatus === 'approved') {
@@ -337,7 +337,7 @@ export default function ApprovalsPage() {
                       <div style={{ fontSize: '12px', fontWeight: 700, color: '#1C1208' }}>
                         {TYPE_LABELS[r.request_type]}
                         <span style={{ fontWeight: 400, color: '#8A6A4A' }}>
-                          {' — '}{r.student?.full_name ?? 'Unknown'}
+                          {' - '}{r.student?.full_name ?? 'Unknown'}
                           {r.student?.roll_number ? ` (${r.student.roll_number})` : ''}
                         </span>
                       </div>

@@ -49,7 +49,7 @@ export async function checkRateLimit(
 }
 
 /**
- * Helper to get a stable identifier from a request — prefers a logged-in
+ * Helper to get a stable identifier from a request - prefers a logged-in
  * user ID if available, falls back to IP address.
  */
 export function getRequestIdentifier(req: Request, fallbackKey?: string): string {

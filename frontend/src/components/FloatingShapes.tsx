@@ -7,7 +7,7 @@ type FloatingShapesProps = {
 export default function FloatingShapes({ sides = 'both' }: FloatingShapesProps) {
   return (
     <>
-      {/* Right side — always shown */}
+      {/* Right side - always shown */}
       <div style={{
         position: 'absolute', width: 22, height: 22,
         border: '1.5px solid #C8A878',
@@ -33,7 +33,7 @@ export default function FloatingShapes({ sides = 'both' }: FloatingShapesProps) 
         animation: 'sethuFloat2 3.5s ease-in-out infinite',
       }} />
 
-      {/* Left side — only when sides="both" */}
+      {/* Left side - only when sides="both" */}
       {sides === 'both' && (
         <>
           <div style={{

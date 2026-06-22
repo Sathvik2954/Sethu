@@ -60,7 +60,7 @@ export default function LoginPage() {
         return
       }
     } catch {
-      // If the rate-limit check itself fails, don't block login — fail open
+      // If the rate-limit check itself fails, don't block login - fail open
     }
 
     const { error } = await supabase.auth.signInWithPassword({

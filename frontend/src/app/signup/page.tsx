@@ -81,7 +81,7 @@ export default function SignupPage() {
       }
 
       if (!data.user) {
-        setError('Signup failed — no user returned. Try again.')
+        setError('Signup failed - no user returned. Try again.')
         setLoading(false)
         return
       }
@@ -188,7 +188,7 @@ export default function SignupPage() {
 
         {/* Step indicator */}
         <div style={{ display: 'flex', marginBottom: '20px', border: '1.5px solid #1C1208' }}>
-          {['01 — ACCOUNT', '02 — DETAILS'].map((label, i) => (
+          {['01 - ACCOUNT', '02 - DETAILS'].map((label, i) => (
             <div key={i} style={{
               flex: 1,
               padding: '8px',
@@ -285,15 +285,15 @@ export default function SignupPage() {
                   </div>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '5px' }}>
                     <div style={reqRowStyle(checks.length)}>
-                      <span>{checks.length ? '✓' : '—'}</span>
+                      <span>{checks.length ? '✓' : '-'}</span>
                       <span>Minimum 8 characters</span>
                     </div>
                     <div style={reqRowStyle(checks.cases)}>
-                      <span>{checks.cases ? '✓' : '—'}</span>
+                      <span>{checks.cases ? '✓' : '-'}</span>
                       <span>Upper &amp; lowercase letters</span>
                     </div>
                     <div style={reqRowStyle(checks.numberSymbol)}>
-                      <span>{checks.numberSymbol ? '✓' : '—'}</span>
+                      <span>{checks.numberSymbol ? '✓' : '-'}</span>
                       <span>A number and a symbol</span>
                     </div>
                   </div>
@@ -359,7 +359,7 @@ export default function SignupPage() {
                   </div>
                 </div>
 
-                {/* Section — numeric dropdown */}
+                {/* Section - numeric dropdown */}
                 <div>
                   <label style={labelStyle}>SECTION</label>
                   <select

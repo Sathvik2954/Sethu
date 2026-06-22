@@ -1,5 +1,5 @@
 """
-SETHU AI Service — Mistral-powered subject prioritization + timetable parsing
+SETHU AI Service - Mistral-powered subject prioritization + timetable parsing
 Uses Mistral's REST API directly (no SDK dependency).
 Run with: python -m uvicorn main:app --reload --port 8000
 """
@@ -22,7 +22,7 @@ MISTRAL_API_KEY = os.getenv("MISTRAL_API_KEY")
 MISTRAL_URL = "https://api.mistral.ai/v1/chat/completions"
 MODEL = "mistral-small-latest"
 
-# Vision model — last-resort fallback if OCR produces nothing usable.
+# Vision model - last-resort fallback if OCR produces nothing usable.
 # NOTE: this model name is the part I'm least certain about.
 VISION_MODEL = "pixtral-12b-2409"
 
@@ -30,7 +30,7 @@ app = FastAPI(title="SETHU AI Service")
 
 # ============================================================
 # Replace your existing CORS middleware block in ai_service/main.py
-# with this — locks down allowed origins instead of "*"
+# with this - locks down allowed origins instead of "*"
 # ============================================================
 
 app.add_middleware(
@@ -126,7 +126,7 @@ def rule_based_priority(subjects: list[SubjectIn]) -> dict:
         "source": "rules",
         "priorities": scored,
         "recommendation": (
-            f"Focus on {top['name']} today — {top['reason']}."
+            f"Focus on {top['name']} today - {top['reason']}."
             if top else "Add subjects with exam dates to get recommendations."
         ),
     }
@@ -220,7 +220,7 @@ def render_pdf_pages_as_png(file_bytes: bytes, max_pages: int = 3, resolution: i
     return images
 
 
-# ── EasyOCR — lazy-loaded reader (model weights download on first use) ──
+# ── EasyOCR - lazy-loaded reader (model weights download on first use) ──
 
 _ocr_reader = None
 _ocr_available = True
@@ -234,7 +234,7 @@ def get_ocr_reader():
             from rapidocr_onnxruntime import RapidOCR
             _ocr_reader = RapidOCR()
         except ImportError:
-            # rapidocr-onnxruntime not installed —
+            # rapidocr-onnxruntime not installed -
             # OCR mode is skipped and we fall through to vision mode.
             _ocr_available = False
             return None
@@ -244,7 +244,7 @@ def get_ocr_reader():
 def ocr_image_to_text(img_bytes: bytes) -> str:
     """Run RapidOCR on an image and return each detected text fragment
     tagged with its pixel coordinates (x increases right, y increases
-    down). Single-character fragments are dropped — these are almost
+    down). Single-character fragments are dropped - these are almost
     always noise from vertical/rotated labels (e.g. a "LUNCH BREAK"
     column printed as stacked letters), not meaningful content.
     Returns "" if RapidOCR isn't available or finds nothing."""
@@ -257,7 +257,7 @@ def ocr_image_to_text(img_bytes: bytes) -> str:
         return ""
 
     # Each item is [bbox, text, score], where bbox is 4 points
-    # [[x1,y1],[x2,y2],[x3,y3],[x4,y4]] — same shape as EasyOCR's output.
+    # [[x1,y1],[x2,y2],[x3,y3],[x4,y4]] - same shape as EasyOCR's output.
     items = []
     for bbox, text, conf in result:
         text = text.strip()
@@ -338,7 +338,7 @@ TIMETABLE_EXTRACTION_RULES = """For each slot, determine:
 - slot_type: one of "class", "lab", "free", "break"
 - room: room number if shown, else null
 
-Return ONLY a valid JSON array of objects with exactly these keys. No explanation, no markdown formatting, no code fences — just the raw JSON array."""
+Return ONLY a valid JSON array of objects with exactly these keys. No explanation, no markdown formatting, no code fences - just the raw JSON array."""
 
 CLASS_TIMETABLE_TEXT_PROMPT = f"""You are given raw text extracted from a college class timetable PDF (a weekly schedule grid).
 
@@ -361,12 +361,12 @@ This is very likely laid out as a GRID:
 - Several columns to the right are PERIODS (often labeled with Roman
   numerals I, II, III, IV, V, VI), each at a smaller y than the day rows
   (i.e. above the grid, as column headers). Each period's TIME RANGE is
-  usually split across two fragments at similar x but different y — e.g.
+  usually split across two fragments at similar x but different y - e.g.
   "09:10AMTO" just above "10:10AM" together mean the period runs
   09:10 AM to 10:10 AM. Combine such pairs to get each period's start/end
   time, and use that period's x position to define that column's x-range.
 - There may be a "LUNCH BREAK" (or similar) label printed vertically as a
-  narrow column between two periods — if you see short fragments near the
+  narrow column between two periods - if you see short fragments near the
   same x spanning a wide y-range that don't look like subject codes, this
   is that label. Do NOT create a slot for it; just treat the periods on
   either side as adjacent.
@@ -374,15 +374,15 @@ This is very likely laid out as a GRID:
   column whose x-range it falls within, and use that period's time range
   as the slot's start_time/end_time.
 - Some entries (often lab sessions, e.g. "XYZ Lab (B1) @ Lab-3") are WIDER
-  and may span TWO OR MORE consecutive periods for that day — if a day's
+  and may span TWO OR MORE consecutive periods for that day - if a day's
   row has fewer entries than the total number of periods, this is likely
   why; in that case use the combined time range (start of the first
   covered period to end of the last covered period) for that slot.
 - Ignore any text that's clearly part of a different table further down
   the page (e.g. course codes, faculty names, mobile numbers, signatures)
-  — only extract slots from the day x period grid itself.
+  - only extract slots from the day x period grid itself.
 - If SATURDAY (or any day) has no subject entries in its row, it's a free
-  day — you may omit it or mark its periods as "free".
+  day - you may omit it or mark its periods as "free".
 
 Extract every class/lab/free/break slot you can identify from the grid.
 
@@ -507,7 +507,7 @@ async def parse_timetable(file: UploadFile = File(...)):
         except httpx.HTTPError as e:
             raise HTTPException(status_code=502, detail=f"Mistral API error (text mode): {e}")
 
-    # ── 2. No embedded text — render pages and run EasyOCR ──
+    # ── 2. No embedded text - render pages and run EasyOCR ──
     try:
         images = render_pdf_pages_as_png(file_bytes)
     except Exception as e:
@@ -534,7 +534,7 @@ async def parse_timetable(file: UploadFile = File(...)):
         except httpx.HTTPError as e:
             raise HTTPException(status_code=502, detail=f"Mistral API error (ocr mode): {e}")
 
-    # ── 3. OCR produced nothing — last resort: vision model ──
+    # ── 3. OCR produced nothing - last resort: vision model ──
     try:
         slots = mistral_parse_images(images)
         return {"slots": slots, "mode": "vision"}
@@ -544,14 +544,14 @@ async def parse_timetable(file: UploadFile = File(...)):
             detail=(
                 f"Text extraction, OCR, and vision parsing all failed. "
                 f"Vision error: {e}. The model name '{VISION_MODEL}' may "
-                "need updating — check current Mistral docs."
+                "need updating - check current Mistral docs."
             ),
         )
         
 # ============================================================
 # ADD THESE TO YOUR EXISTING ai_service/main.py
 # Place after your existing /parse-timetable endpoint
-# Do NOT add the old "main-additions.py" block — replace it with this.
+# Do NOT add the old "main-additions.py" block - replace it with this.
 # Reuses your existing MISTRAL_URL, MODEL, httpx, and OCR/text helpers.
 # ============================================================
 
@@ -565,14 +565,14 @@ ALMANAC_EXTRACTION_RULES = """For each event, determine:
    "registration" for course registration, "academic" for class work/instruction dates, "other" otherwise)
 - semester: integer if mentioned (e.g. "Semester VII" = 7, "Semester VIII" = 8), otherwise null
 
-Return ONLY a valid JSON array of objects with exactly these keys. No explanation, no markdown formatting, no code fences — just the raw JSON array."""
+Return ONLY a valid JSON array of objects with exactly these keys. No explanation, no markdown formatting, no code fences - just the raw JSON array."""
 
 ALMANAC_TEXT_PROMPT = f"""You are given raw text extracted from an academic almanac PDF from an Indian
 engineering college. The document contains a numbered table of academic events with date ranges, like:
-1. Course Registration (Online) — 06.07.2026 to 11.07.2026
-2. Commencement of class work — 13.07.2026
-3. Class Test - I — 02.09.2026 to 05.09.2026
-4. Dussehra Holidays — 19.10.2026 to 24.10.2026
+1. Course Registration (Online) - 06.07.2026 to 11.07.2026
+2. Commencement of class work - 13.07.2026
+3. Class Test - I - 02.09.2026 to 05.09.2026
+4. Dussehra Holidays - 19.10.2026 to 24.10.2026
 
 Extract ALL numbered events you can identify.
 
@@ -588,7 +588,7 @@ EXAM_EXTRACTION_RULES = """For each exam entry, determine:
 - exam_end_time: "HH:MM" 24-hour format, or null if not specified
 - exam_room: string (room/venue), or null if not specified
 
-Return ONLY a valid JSON array of objects with exactly these keys. No explanation, no markdown formatting, no code fences — just the raw JSON array."""
+Return ONLY a valid JSON array of objects with exactly these keys. No explanation, no markdown formatting, no code fences - just the raw JSON array."""
 
 EXAM_TEXT_PROMPT = f"""You are given raw text extracted from an exam timetable PDF from an Indian
 engineering college. It lists exam subjects with their dates, times, and rooms, in any layout
@@ -625,7 +625,7 @@ async def parse_almanac(file: UploadFile = File(...)):
         except httpx.HTTPError as e:
             raise HTTPException(status_code=502, detail=f"Mistral API error (text mode): {e}")
 
-    # ── 2. No embedded text — render pages and run OCR ──
+    # ── 2. No embedded text - render pages and run OCR ──
     try:
         images = render_pdf_pages_as_png(file_bytes)
     except Exception as e:
@@ -675,7 +675,7 @@ async def parse_exam_timetable(file: UploadFile = File(...)):
         except httpx.HTTPError as e:
             raise HTTPException(status_code=502, detail=f"Mistral API error (text mode): {e}")
 
-    # ── 2. No embedded text — render pages and run OCR ──
+    # ── 2. No embedded text - render pages and run OCR ──
     try:
         images = render_pdf_pages_as_png(file_bytes)
     except Exception as e:
