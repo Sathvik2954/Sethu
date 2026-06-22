@@ -69,6 +69,9 @@ const TYPE_LABELS: Record<RequestType, string> = {
   fees: 'Fee Receipt',
 }
 
+// ── TODAY constant for date max constraint ─────────────────────
+const TODAY = new Date().toISOString().slice(0, 10)
+
 function emptyForm(): FormState {
   return {
     event_date: '', event_end_date: '', event_subject: '', event_content: '', signature_confirm: false,
@@ -80,8 +83,6 @@ function emptyForm(): FormState {
     fee_name: '', fee_other_name: '', fee_amount: '',
   }
 }
-
-// ── Sub-components OUTSIDE main (fixes cursor jump) ────────────
 
 function Row({ label, value }: { label: string; value: string }) {
   return (
@@ -202,7 +203,6 @@ function TypeBtn({ type, desc, onClick }: { type: RequestType; desc: string; onC
   )
 }
 
-// ── File upload — outside main ─────────────────────────────────
 function FileUpload({
   fileRef, paymentFile, setPaymentFile, setFormError,
 }: {
@@ -236,7 +236,6 @@ function FileUpload({
   )
 }
 
-// ── Main component ─────────────────────────────────────────────
 export default function RequestsPage() {
   const supabase = createClient()
   const [requests, setRequests] = useState<Request[]>([])
@@ -292,8 +291,6 @@ export default function RequestsPage() {
     const path = `${uid}/payment-${Date.now()}.${ext}`
     const { error } = await supabase.storage.from('request-attachments').upload(path, paymentFile, { upsert: true })
     if (error) { setFormError('File upload failed: ' + error.message); return null }
-    // Store the storage PATH, not a public URL — bucket is private, so we
-    // generate a signed URL on-demand whenever someone needs to view it.
     return path
   }
 
@@ -458,7 +455,9 @@ export default function RequestsPage() {
               {activeForm === 'lost_id_card' && (<>
                 <div>
                   <label style={labelStyle}>DATE IT WAS LOST</label>
-                  <input type="date" value={form.lost_date} onChange={e => upd('lost_date', e.target.value)} style={inputStyle} />
+                  {/* ── MAX DATE FIX: prevents future date selection ── */}
+                  <input type="date" value={form.lost_date} max={TODAY} onChange={e => upd('lost_date', e.target.value)} style={inputStyle} />
+                  <div style={{ fontSize: '9px', color: '#8A6A4A', marginTop: '4px' }}>Cannot be a future date</div>
                 </div>
                 <div>
                   <label style={labelStyle}>WHERE WAS IT LOST</label>

@@ -51,7 +51,6 @@ const DIFF_FG   = { easy: '#F2EDE6', medium: '#1C1208', hard: '#F2EDE6' }
 const TYPE_LABEL = { theory: 'THEORY', lab: 'LAB', elective: 'ELECTIVE' }
 const DEPARTMENTS = ['CSE','AIML','CET','AIDS','IT','ECE','EEE','MECH','CIVIL','BIO TECH']
 
-// ── Tag input helper (outside to avoid remount) ────────────────
 function TagInput({
   tags, onAdd, onRemove, placeholder,
 }: { tags: string[]; onAdd: (t: string) => void; onRemove: (t: string) => void; placeholder: string }) {
@@ -80,7 +79,6 @@ function TagInput({
   )
 }
 
-// ── Subject card (outside to avoid remount) ───────────────────
 function SubjectCard({
   s, note, isStaff, onDelete, onSaveNote,
 }: {
@@ -123,7 +121,8 @@ function SubjectCard({
             <span style={{ fontSize: '7px', fontWeight: 700, letterSpacing: '1px', padding: '2px 6px', background: '#1C1208', color: '#C8A878' }}>
               {TYPE_LABEL[s.subject_type]}
             </span>
-            {s.credits && <span style={{ fontSize: '9px', color: '#8A6A4A' }}>{s.credits}cr</span>}
+            {/* ── CREDITS FORMAT FIX: was {s.credits}cr, now Credits — {s.credits} ── */}
+            {s.credits && <span style={{ fontSize: '9px', color: '#8A6A4A' }}>Credits — {s.credits}</span>}
           </div>
           <div style={{ fontSize: '10px', color: '#8A6A4A', marginTop: '3px' }}>
             {s.department} · Y{s.year}{s.section ? ` · Sec ${s.section}` : ''}
@@ -138,7 +137,6 @@ function SubjectCard({
       {open && (
         <div style={{ borderTop: '1px solid #E0D0B8', padding: '16px', display: 'flex', flexDirection: 'column', gap: '14px' }}>
 
-          {/* Faculty: delete button */}
           {isStaff && (
             <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
               <button type="button" onClick={() => onDelete(s.id)} style={{
@@ -149,7 +147,6 @@ function SubjectCard({
             </div>
           )}
 
-          {/* Student: notes section */}
           {!isStaff && (
             <>
               {!editing ? (
@@ -266,7 +263,6 @@ function SubjectCard({
   )
 }
 
-// ── Main page ──────────────────────────────────────────────────
 export default function SubjectsPage() {
   const supabase = createClient()
   const [me, setMe] = useState<UserInfo | null>(null)
@@ -278,7 +274,6 @@ export default function SubjectsPage() {
   const [success, setSuccess] = useState('')
   const [saving, setSaving] = useState(false)
 
-  // Faculty add form
   const [form, setForm] = useState({
     subject_code: '', subject_name: '', credits: '', subject_type: 'theory',
     target_dept: '', target_year: '', target_section: '',
@@ -303,7 +298,6 @@ export default function SubjectsPage() {
     const { data: subs } = await query.order('subject_code')
     setSubjects((subs as Subject[]) ?? [])
 
-    // Load student notes
     if (!isStaff && subs && subs.length > 0) {
       const subjectIds = subs.map((s: Subject) => s.id)
       const { data: noteData } = await supabase
@@ -407,7 +401,6 @@ export default function SubjectsPage() {
         {success && <div style={{ fontSize: '11px', color: '#3D7A50', borderLeft: '2px solid #3D7A50', paddingLeft: '10px' }}>{success}</div>}
         {error && <div style={{ fontSize: '11px', color: '#D94F00', borderLeft: '2px solid #D94F00', paddingLeft: '10px' }}>{error}</div>}
 
-        {/* Faculty add form */}
         {isStaff && showForm && (
           <div style={{ border: '1.5px solid #1C1208', background: '#FDFAF5' }}>
             <div style={{ padding: '10px 18px', borderBottom: '1.5px solid #1C1208', fontSize: '9px', fontWeight: 700, letterSpacing: '2px', color: '#8A6A4A' }}>

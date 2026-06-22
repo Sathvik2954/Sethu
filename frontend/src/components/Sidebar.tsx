@@ -174,15 +174,15 @@ export default function Sidebar({ fullName, department, year, role = 'student', 
         </div>
 
         {/* Role badge */}
-        <div className="sethu-nav-label" style={{
-          margin: '10px 20px 0',
-          display: 'inline-flex', alignSelf: 'flex-start',
-          background: roleBadgeColor(role),
-          color: '#F2EDE6', fontSize: '7px', fontWeight: 700,
-          letterSpacing: '1.5px', padding: '3px 8px',
-        }}>
-          {role.toUpperCase()}
-        </div>
+<div className="sethu-nav-label sethu-role-badge" style={{
+  margin: '10px 20px 0',
+  display: 'inline-flex', alignSelf: 'flex-start',
+  background: roleBadgeColor(role),
+  color: '#F2EDE6', fontSize: '7px', fontWeight: 700,
+  letterSpacing: '1.5px', padding: '3px 8px',
+}}>
+  {role.toUpperCase()}
+</div>
 
         {/* Nav */}
         <nav style={{ flex: 1, padding: '6px 0' }}>
@@ -282,44 +282,47 @@ export default function Sidebar({ fullName, department, year, role = 'student', 
 
       </aside>
 
-      <style jsx>{`
-        .sethu-sidebar-toggle { display: none; }
-        .sethu-wordmark-collapsed { display: none; }
-        .sethu-backdrop {
-          display: none; position: fixed; inset: 0;
-          background: rgba(28,18,8,0.45); z-index: 90;
-        }
+<style jsx>{`
+  .sethu-sidebar-toggle { display: none; }
+  .sethu-wordmark-collapsed { display: block; } /* fallback safely */
+  .sethu-wordmark-full { display: none; }
+  .sethu-role-badge { display: none !important; } /* Hide by default in collapsed modes */
+  .sethu-nav-label { display: none; }
+  .sethu-nav-link { justify-content: center; padding: 10px 0 !important; }
+  .sethu-backdrop { display: none; position: fixed; inset: 0; background: rgba(28,18,8,0.45); z-index: 90; }
 
-        @media (max-width: 1024px) and (min-width: 761px) {
-          .sethu-sidebar { width: clamp(60px, 12vw, 80px) !important; }
-          .sethu-wordmark-full { display: none; }
-          .sethu-wordmark-collapsed { display: block; }
-          .sethu-nav-label { display: none; }
-          .sethu-nav-link { justify-content: center; padding: 10px 0 !important; }
-        }
+  /* Desktop Extended View */
+  @media (min-width: 1025px) {
+    .sethu-wordmark-full { display: block; }
+    .sethu-wordmark-collapsed { display: none; }
+    .sethu-role-badge { display: inline-flex !important; }
+    .sethu-nav-label { display: block; }
+    .sethu-nav-link { justify-content: flex-start; }
+  }
 
-        @media (max-width: 760px) {
-          .sethu-sidebar { width: 56px !important; min-width: 56px !important; }
-          .sethu-sidebar-toggle { display: flex; align-items: center; justify-content: center; }
-          .sethu-wordmark-full { display: none; }
-          .sethu-wordmark-collapsed { display: block; }
-          .sethu-nav-label { display: none; }
-          .sethu-nav-link { justify-content: center; padding: 10px 0 !important; }
-          .sethu-backdrop { display: block; }
+  @media (max-width: 1024px) and (min-width: 761px) {
+    .sethu-sidebar { width: clamp(60px, 12vw, 80px) !important; }
+  }
 
-          .sethu-sidebar-expanded {
-            position: fixed; top: 0; left: 0;
-            width: min(220px, 80vw) !important; min-width: 0 !important;
-            height: 100vh; z-index: 100;
-            box-shadow: 4px 0 16px rgba(0,0,0,0.3);
-          }
-          .sethu-sidebar-expanded .sethu-wordmark-full { display: block; }
-          .sethu-sidebar-expanded .sethu-wordmark-collapsed { display: none; }
-          .sethu-sidebar-expanded .sethu-nav-label { display: block; }
-          .sethu-sidebar-expanded .sethu-nav-link { justify-content: flex-start; padding: 8px 20px !important; }
-          .sethu-sidebar-expanded .sethu-nav-icon { display: none; }
-        }
-      `}</style>
+  @media (max-width: 760px) {
+    .sethu-sidebar { width: 56px !important; min-width: 56px !important; }
+    .sethu-sidebar-toggle { display: flex; align-items: center; justify-content: center; }
+    .sethu-backdrop { display: block; }
+
+    .sethu-sidebar-expanded {
+      position: fixed; top: 0; left: 0;
+      width: min(220px, 80vw) !important; min-width: 0 !important;
+      height: 100vh; z-index: 100;
+      box-shadow: 4px 0 16px rgba(0,0,0,0.3);
+    }
+    .sethu-sidebar-expanded .sethu-wordmark-full { display: block; }
+    .sethu-sidebar-expanded .sethu-wordmark-collapsed { display: none; }
+    .sethu-sidebar-expanded .sethu-role-badge { display: inline-flex !important; }
+    .sethu-sidebar-expanded .sethu-nav-label { display: block; }
+    .sethu-sidebar-expanded .sethu-nav-link { justify-content: flex-start; padding: 8px 20px !important; }
+    .sethu-sidebar-expanded .sethu-nav-icon { display: none; }
+  }
+`}</style>
     </>
   )
 }
